@@ -31,7 +31,7 @@ def run_query(token, query):
     else:
         return result
 
-def get_issue(token, user, repo, issueno):
+def get_issue(token, user, repo, issueno, include_comments=True):
     query = f"""{{
     repository(owner:"{user}", name:"{repo}") {{
         issue(number:{issueno}) {{
@@ -41,6 +41,17 @@ def get_issue(token, user, repo, issueno):
             }},
             body,
             createdAt
+            { '''
+            comments(first:20) {
+                nodes {
+                    author {
+                        login
+                    },
+                    body,
+                    createdAt
+                }
+            }
+            ''' if include_comments else '' }
         }}
     }}
     }}"""
@@ -87,13 +98,22 @@ def format_email(name, address, timestamp, subject, body):
                                break_long_words=False,
                                break_on_hyphens=False)
 
-def format_issue(token, user, repo, issueno):
-    issue = get_issue(token, user, repo, number)
+def format_issue(token, user, repo, issueno, include_comments=True):
+    issue = get_issue(token, user, repo, number, include_comments)
+    title = issue["title"]
     author = get_user(token, issue["author"]["login"])
 
-    return format_email(author["name"] or author["login"], author["email"],
-                        isoparse(issue["createdAt"]), issue["title"],
-                        issue["body"])
+    result = format_email(author["name"] or author["login"], author["email"],
+                          isoparse(issue["createdAt"]), title, issue["body"])
+    if not include_comments:
+        return result
+    for comment in issue["comments"]["nodes"]:
+        author = get_user(token, comment["author"]["login"])
+        result += "\n\n" + format_email(
+            author["name"] or author["login"], author["email"],
+            isoparse(comment["createdAt"]), f"Re: {title}", comment["body"]
+        )
+    return result
 
 def format_pr(token, user, repo, prno):
     pr = get_pr(token, user, repo, prno)

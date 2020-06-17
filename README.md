@@ -18,15 +18,18 @@ Python 3 (latest version recommended), request, docopt, dotenv, dateutil
 
 ## Roadmap
 
-- Multipart email support (Markdown as text/plain and HTML)
-  + I don't think it would be very helpful to use the plaintext body
-  ([`bodyText` in GitHub's GraphQL API][0]) because that would lose some
-  information such as hyperlinks and images.
+- Stop quoted lines from wrapping with adjacent lines, e.g.
+```
+> a
+b
+```
 - Expand issue support
 - Add support for issue comments
 - Support pull requests in addition to issues
 - Write documentation
+- Deal with pagination
 - Keep track of rate limit and pause if it is reached
+- Multipart email support with HTML part
 - Add support for non-user actors (e.g. an organization or bot could leave
   a comment)
   + [The `author` field][0] is an [`Actor`][1], which does not necessarily have
