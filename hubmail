@@ -2,7 +2,12 @@
 """hubmail: a tool to export GitHub issues and pull requests as email messages
 
 Usage:
-  hubmail (-i|-p) USER REPO NUMBER
+  hubmail (-i|-p) [-n] USER REPO NUMBER
+
+Options:
+  -i     Get issue #NUMBER from GitHub
+  -p     Get pull request #NUMBER from GitHub
+  -n     Do not include comments
 """
 
 import sys
@@ -100,17 +105,18 @@ def fill(text, **kwargs):
 
 def format_email(name, address, timestamp, subject, body):
     body = "\n".join(
-        fill("\n".join(g), subsequent_indent="> " if is_quote else "")
-        for is_quote, g in itertools.groupby(
+        fill("\n".join(g), subsequent_indent=match.group(0)
+             if match and match.group(0).startswith(">") else "")
+        for match, g in itertools.groupby(
             body.replace("\r\n", "\n").splitlines(),
-            lambda l: l.startswith(">")
+            lambda line: re.match(r"(?:\W+ |>)|$", line)
         )
     )
     # Remove leading whitespace when it is exactly one space
     body = re.sub(r"^ (?=\S)", "", body, flags=re.MULTILINE)
     body = re.sub(r"^>  (?=\S)", "> ", body, flags=re.MULTILINE)
     # Remove all trailing whitespace
-    body = re.sub(r"^(\S+)\s+$", "\1", body, flags=re.MULTILINE)
+    body = re.sub(r"^\S\s+$", "\1", body, flags=re.MULTILINE)
 
     return textwrap.dedent(f"""\
         From: {eu.formataddr((name, address))}
@@ -147,6 +153,7 @@ if __name__ == "__main__":
     user = arguments["USER"]
     repo = arguments["REPO"]
     number = arguments["NUMBER"]
+    include_comments = not arguments["-n"]
 
     load_dotenv()
     token = os.getenv("HUBMAIL_TOKEN")
@@ -156,6 +163,6 @@ if __name__ == "__main__":
         exit(1)
 
     if arguments["-i"]:
-        print(format_issue(token, user, repo, number))
+        print(format_issue(token, user, repo, number, include_comments))
     if arguments["-p"]:
         print(format_pr(token, user, repo, number))
