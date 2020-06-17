@@ -8,7 +8,7 @@ Usage:
 import sys
 import os
 import email.utils as email
-from textwrap import fill
+from textwrap import fill, dedent
 
 import requests
 from docopt import docopt
@@ -64,6 +64,17 @@ def get_user(token, login):
         print(e, file=sys.stderr)
         sys.exit(1)
 
+def format_issue(token, user, repo, issueno):
+    issue = get_issue(token, user, repo, number)
+    author = get_user(token, issue["author"]["login"])
+
+    return dedent(f"""\
+        Subject: {issue["title"]}
+        From: {email.formataddr(
+            (author["name"] or author["login"], author["email"]))}
+        Date: {email.format_datetime(isoparse(issue["createdAt"]))}
+        \n""") + fill(issue["body"], TEXTWIDTH)
+
 if __name__ == "__main__":
     arguments = docopt(__doc__)
     user = arguments["USER"]
@@ -78,11 +89,4 @@ if __name__ == "__main__":
         exit(1)
 
     if arguments["-i"]:
-        issue = get_issue(token, user, repo, number)
-        author = get_user(token, issue["author"]["login"])
-
-        print(f"""Subject: {issue["title"]}
-From: {email.formataddr((author["name"] or author["login"], author["email"]))}
-Date: {email.format_datetime(isoparse(issue["createdAt"]))}
-
-{fill(issue["body"], TEXTWIDTH)}""")
+        print(format_issue(token, user, repo, number))
