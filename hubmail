@@ -69,9 +69,9 @@ def format_issue(token, user, repo, issueno):
     author = get_user(token, issue["author"]["login"])
 
     return dedent(f"""\
-        Subject: {issue["title"]}
         From: {email.formataddr(
             (author["name"] or author["login"], author["email"]))}
+        Subject: {issue["title"]}
         Date: {email.format_datetime(isoparse(issue["createdAt"]))}
         \n""") + fill(issue["body"], TEXTWIDTH)
 
