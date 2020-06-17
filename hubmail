@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""hubmail: a tool to export GitHub issues and pull requests as email messages
+
+Usage:
+  hubmail (-i|-p) USER REPO NUMBER
+"""
+
+import sys
+import os
+import email.utils as email
+from textwrap import fill
+
+import requests
+from docopt import docopt
+from dotenv import load_dotenv
+from dateutil.parser import isoparse
+
+# Maximum line length
+TEXTWIDTH = 72
+
+def run_query(token, query):
+    request = requests.post("https://api.github.com/graphql",
+                            json={"query": query},
+                            headers={"Authorization": f"Bearer {token}"})
+    if request.status_code != 200:
+        raise Exception(f"Fail with {request.status_code}\n{query}")
+    result = request.json()
+
+    if "errors" in result:
+        raise Exception(result["errors"])
+    else:
+        return result
+
+def get_issue(token, user, repo, issueno):
+    query = f"""{{
+    repository(owner:"{user}", name:"{repo}") {{
+        issue(number:{issueno}) {{
+            title,
+            author {{
+                login
+            }},
+            body,
+            createdAt
+        }}
+    }}
+    }}"""
+    try:
+        return run_query(token, query)["data"]["repository"]["issue"]
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
+
+def get_user(token, login):
+    query = f"""{{
+    user(login:"{login}") {{
+        login,
+        name,
+        email
+    }}
+    }}"""
+    try:
+        return run_query(token, query)["data"]["user"]
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    arguments = docopt(__doc__)
+    user = arguments["USER"]
+    repo = arguments["REPO"]
+    number = arguments["NUMBER"]
+
+    load_dotenv()
+    token = os.getenv("HUBMAIL_TOKEN")
+    if not token:
+        print("No API token found. Have you set the HUBMAIL_TOKEN " +
+              "environment variable?", file=sys.stderr)
+        exit(1)
+
+    if arguments["-i"]:
+        issue = get_issue(token, user, repo, number)
+        author = get_user(token, issue["author"]["login"])
+
+        print(f"""Subject: {issue["title"]}
+From: {email.formataddr((author["name"] or author["login"], author["email"]))}
+Date: {email.format_datetime(isoparse(issue["createdAt"]))}
+
+{fill(issue["body"], TEXTWIDTH)}""")
