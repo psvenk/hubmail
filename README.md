@@ -26,9 +26,6 @@ Python 3 (latest version recommended), request, docopt, dotenv, dateutil
 - Add support for issue comments
 - Support pull requests in addition to issues
 - Write documentation
-- `mbox` export
-  + Currently the output of `hubmail` can be saved to a file with extension
-  `.eml` and viewed in Thunderbird
 - Keep track of rate limit and pause if it is reached
 - Add support for non-user actors (e.g. an organization or bot could leave
   a comment)
