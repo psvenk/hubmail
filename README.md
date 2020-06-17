@@ -18,14 +18,8 @@ Python 3 (latest version recommended), request, docopt, dotenv, dateutil
 
 ## Roadmap
 
-- Stop quoted lines from wrapping with adjacent lines, e.g.
-```
-> a
-b
-```
 - Expand issue support
-- Add support for issue comments
-- Support pull requests in addition to issues
+- Add support for pull request comments
 - Write documentation
 - Deal with pagination
 - Keep track of rate limit and pause if it is reached

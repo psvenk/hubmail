@@ -9,6 +9,8 @@ import sys
 import os
 import email.utils as eu
 import textwrap
+import itertools
+import re
 
 import requests
 from docopt import docopt
@@ -89,14 +91,32 @@ def get_user(token, login):
         print(e, file=sys.stderr)
         sys.exit(1)
 
+def fill(text, **kwargs):
+    return textwrap.fill(
+        text, TEXTWIDTH, expand_tabs=False, replace_whitespace=False,
+        drop_whitespace=False, break_long_words=False, break_on_hyphens=False,
+        **kwargs
+    )
+
 def format_email(name, address, timestamp, subject, body):
+    body = "\n".join(
+        fill("\n".join(g), subsequent_indent="> " if is_quote else "")
+        for is_quote, g in itertools.groupby(
+            body.replace("\r\n", "\n").splitlines(),
+            lambda l: l.startswith(">")
+        )
+    )
+    # Remove leading whitespace when it is exactly one space
+    body = re.sub(r"^ (?=\S)", "", body, flags=re.MULTILINE)
+    body = re.sub(r"^>  (?=\S)", "> ", body, flags=re.MULTILINE)
+    # Remove all trailing whitespace
+    body = re.sub(r"^(\S+)\s+$", "\1", body, flags=re.MULTILINE)
+
     return textwrap.dedent(f"""\
         From: {eu.formataddr((name, address))}
         Date: {eu.format_datetime(timestamp)}
         Subject: {subject}
-        \n""") + textwrap.fill(body, TEXTWIDTH,
-                               break_long_words=False,
-                               break_on_hyphens=False)
+        \n""") + body
 
 def format_issue(token, user, repo, issueno, include_comments=True):
     issue = get_issue(token, user, repo, number, include_comments)
