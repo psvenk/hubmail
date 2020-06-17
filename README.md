@@ -3,7 +3,7 @@ hubmail
 
 A tool to export GitHub issues and pull requests as email messages.
 
-# Differences from similar tools
+## Differences from similar tools
 
 The only similar tool of which I am aware is [export-pull-requests][0] by Skye
 Shaw, which exports only metadata and uses CSV format instead of email format.
@@ -12,11 +12,11 @@ I would be eager to check it out!
 
 [0]: https://github.com/sshaw/export-pull-requests
 
-# Dependencies
+## Dependencies
 
 Python 3 (latest version recommended), request, docopt, dotenv, dateutil
 
-# Roadmap
+## Roadmap
 
 - Multipart email support (Markdown as text/plain and HTML)
   + I don't think it would be very helpful to use the plaintext body
@@ -30,6 +30,10 @@ Python 3 (latest version recommended), request, docopt, dotenv, dateutil
   + Currently the output of `hubmail` can be saved to a file with extension
   `.eml` and viewed in Thunderbird
 - Keep track of rate limit and pause if it is reached
+- Add support for non-user actors (e.g. an organization or bot could leave
+  a comment)
+  + [The `author` field][0] is an [`Actor`][1], which does not necessarily have
+  to be a `User`
 
 And possibly:
 - Add support for edited issues
@@ -37,8 +41,9 @@ And possibly:
   with commits
 
 [0]: https://developer.github.com/v4/interface/comment/
+[1]: https://developer.github.com/v4/interface/actor/
 
-# License
+## License
 
 SPDX-License-Identifier: LGPL-2.1-or-later
 
