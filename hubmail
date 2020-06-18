@@ -68,11 +68,23 @@ def get_issue(token, user, repo, issueno, include_comments=True):
         print(e, file=sys.stderr)
         sys.exit(1)
 
-def get_pr(token, user, repo, prno):
+def get_pr(token, user, repo, prno, include_comments=True):
     query = f"""{{
     repository(owner:"{user}", name:"{repo}") {{
         pullRequest(number:{prno}) {{
-            url
+            url,
+            { '''
+            title,
+            comments(first:20) {
+                nodes {
+                    author {
+                        login
+                    },
+                    body,
+                    createdAt
+                }
+            }
+            ''' if include_comments else '' }
         }}
     }}
     }}"""
@@ -126,27 +138,37 @@ def format_email(name, address, timestamp, subject, body):
 
 def format_issue(token, user, repo, issueno, include_comments=True):
     issue = get_issue(token, user, repo, number, include_comments)
-    title = issue["title"]
     author = get_user(token, issue["author"]["login"])
 
     result = format_email(author["name"] or author["login"], author["email"],
-                          isoparse(issue["createdAt"]), title, issue["body"])
+                          isoparse(issue["createdAt"]), issue["title"],
+                          issue["body"])
     if not include_comments:
         return result
-    for comment in issue["comments"]["nodes"]:
-        author = get_user(token, comment["author"]["login"])
-        result += "\n\n" + format_email(
-            author["name"] or author["login"], author["email"],
-            isoparse(comment["createdAt"]), f"Re: {title}", comment["body"]
-        )
-    return result
+    return result + format_comments(issue["comments"]["nodes"],
+                                    f"Re: {issue['title']}")
 
-def format_pr(token, user, repo, prno):
+def format_pr(token, user, repo, prno, include_comments=True):
     pr = get_pr(token, user, repo, prno)
     request = requests.get(f"{pr['url']}.patch")
     if request.status_code != 200:
         print(f"{pr['url']}: fail with {request.status_code}", file=sys.stderr)
-    return request.text
+    result = request.text
+
+    if not include_comments:
+        return result
+    return result + format_comments(pr["comments"]["nodes"],
+                                    f"Re: {pr['title']}")
+
+def format_comments(comments, subject):
+    result = ""
+    for comment in comments:
+        author = get_user(token, comment["author"]["login"])
+        result += "\n\n" + format_email(
+            author["name"] or author["login"], author["email"],
+            isoparse(comment["createdAt"]), subject, comment["body"]
+        )
+    return result
 
 if __name__ == "__main__":
     arguments = docopt(__doc__)
@@ -165,4 +187,4 @@ if __name__ == "__main__":
     if arguments["-i"]:
         print(format_issue(token, user, repo, number, include_comments))
     if arguments["-p"]:
-        print(format_pr(token, user, repo, number))
+        print(format_pr(token, user, repo, number, include_comments))

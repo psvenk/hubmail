@@ -19,7 +19,6 @@ Python 3 (latest version recommended), request, docopt, dotenv, dateutil
 ## Roadmap
 
 - Expand issue support
-- Add support for pull request comments
 - Write documentation
 - Deal with pagination
 - Keep track of rate limit and pause if it is reached
