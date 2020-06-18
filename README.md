@@ -20,6 +20,8 @@ Optional: dotenv (for storing the API key in a `.env` file)
 
 ## Roadmap
 
+- Specify UTF-8
+- Include message IDs (so conversation threading is possible)
 - Expand issue support
 - Write documentation
 - Deal with pagination
