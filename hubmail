@@ -110,13 +110,6 @@ def get_user(token, login):
         print(e, file=sys.stderr)
         sys.exit(1)
 
-def fill(text, cols, **kwargs):
-    return textwrap.fill(
-        text, cols, expand_tabs=False, replace_whitespace=False,
-        drop_whitespace=False, break_long_words=False, break_on_hyphens=False,
-        **kwargs
-    )
-
 def from_heading(heading="-"):
     return f"From {heading} {eu.format_datetime(eu.localtime())}\n"
 
@@ -128,18 +121,14 @@ def format_email(name, address, timestamp, subject, body, options,
         cols = 0
     if cols > 0:
         body = "\n".join(
-            fill("\n".join(g), cols, subsequent_indent=match.group(0)
-                 if match and match.group(0).startswith(">") else "")
-            for match, g in itertools.groupby(
-                body.replace("\r\n", "\n").splitlines(),
-                lambda line: re.match(r"(?:\W+ |>)|$", line)
-            )
-        )
-        # Remove leading whitespace when it is exactly one space
-        body = re.sub(r"^ (?=\S)", r"", body, flags=re.MULTILINE)
-        body = re.sub(r"^>  (?=\S)", r"> ", body, flags=re.MULTILINE)
-        # Remove all trailing whitespace
-        body = re.sub(r"^(\S)\s+$", r"\1", body, flags=re.MULTILINE)
+            textwrap.fill(
+                line, cols, expand_tabs=False, replace_whitespace=False,
+                break_long_words=False, break_on_hyphens=False,
+                subsequent_indent=(
+                    "> " if line.startswith("> ")
+                    else ">" if line.startswith(">")
+                    else ""))
+            for line in body.replace("\r\n", "\n").splitlines())
 
     # Replace "From" at the beginning of a line with ">From";
     # include any quoting so that this process is reversible.
