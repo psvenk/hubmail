@@ -18,11 +18,21 @@ Python 3 (latest version recommended), request, docopt, dateutil
 
 Optional: dotenv (for storing the API key in a `.env` file)
 
+## Usage
+
+1. Create a peronal access token on GitHub's website following [these
+   instructions][1].
+2. Set the environment variable `HUBMAIL_TOKEN` to your token. If you have the
+   Python `dotenv` library installed, you can alternatively create a file
+   `.env` with the line `HUBMAIL_TOKEN=your_token_here`.
+3. Run `./hubmail` for usage information.
+
+[1]: https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line
+
 ## Roadmap
 
 - Include message IDs (so conversation threading is possible)
 - Expand issue support
-- Write documentation
 - Deal with pagination
 - Keep track of rate limit and pause if it is reached
 - Multipart email support with HTML part
@@ -61,4 +71,4 @@ You should have received a copy of the GNU Lesser General Public License along
 with this library; if not, write to the Free Software Foundation, Inc., 51
 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-<!-- vim: set tw=80: -->
+<!-- vim: set tw=79: -->
