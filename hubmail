@@ -9,6 +9,7 @@ Options:
   -p     Get pull request #NUMBER from GitHub
   -n     Do not include comments
 """
+# SPDX-License-Identifier: LGPL-2.1-or-later
 
 import sys
 import os
