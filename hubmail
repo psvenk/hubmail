@@ -14,6 +14,7 @@ Options:
 import sys
 import os
 import email.utils as eu
+from time import time, gmtime, asctime
 import textwrap
 import itertools
 import re
@@ -140,7 +141,7 @@ def format_email(name, address, timestamp, subject, body, options,
 
     return (
         textwrap.dedent(f"""\
-            From {heading} {eu.format_datetime(eu.localtime())}
+            From nobody@localhost {asctime(gmtime(time()))}
             From: {eu.formataddr((name, address))}
             Date: {eu.format_datetime(timestamp)}
             Subject: {subject}
