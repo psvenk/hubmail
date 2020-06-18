@@ -20,6 +20,7 @@ Optional: dotenv (for storing the API key in a `.env` file)
 
 ## Roadmap
 
+- splitmbox: recognize 'From ... DATE' before message headers
 - Specify UTF-8
 - Include message IDs (so conversation threading is possible)
 - Expand issue support
