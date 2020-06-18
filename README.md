@@ -31,7 +31,6 @@ Optional: dotenv (for storing the API key in a `.env` file)
 
 ## Roadmap
 
-- Include message IDs (so conversation threading is possible)
 - Expand issue support
 - Deal with pagination
 - Keep track of rate limit and pause if it is reached

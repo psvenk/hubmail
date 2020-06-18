@@ -53,6 +53,7 @@ def get_issue(token, user, repo, number, options):
             { '''
             comments(first:20) {
                 nodes {
+                    databaseId,
                     author {
                         login
                     },
@@ -79,6 +80,7 @@ def get_pr(token, user, repo, number, options):
             title,
             comments(first:20) {
                 nodes {
+                    databaseId,
                     author {
                         login
                     },
@@ -110,11 +112,13 @@ def get_user(token, login):
         print(e, file=sys.stderr)
         sys.exit(1)
 
-def from_heading(heading="-"):
-    return f"From {heading} {eu.format_datetime(eu.localtime())}\n"
-
 def format_email(name, address, timestamp, subject, body, options,
-                 heading="-"):
+                 heading, message_id=None, in_reply_to=None, references=None):
+    if references is None and in_reply_to is not None:
+        references = [in_reply_to]
+
+    body = body.replace("\r\n", "\n")
+
     try:
         cols = int(options["wrap"])
     except ValueError:
@@ -128,54 +132,68 @@ def format_email(name, address, timestamp, subject, body, options,
                     "> " if line.startswith("> ")
                     else ">" if line.startswith(">")
                     else ""))
-            for line in body.replace("\r\n", "\n").splitlines())
+            for line in body.splitlines())
 
     # Replace "From" at the beginning of a line with ">From";
     # include any quoting so that this process is reversible.
     body = re.sub(r"^([> ]*)From", r">\1From", body, flags=re.MULTILINE)
 
-    return from_heading(heading) + textwrap.dedent(f"""\
-        From: {eu.formataddr((name, address))}
-        Date: {eu.format_datetime(timestamp)}
-        Subject: {subject}
-        Content-Type: text/plain; charset=UTF-8
-        \n""") + body
+    return (
+        textwrap.dedent(f"""\
+            From {heading} {eu.format_datetime(eu.localtime())}
+            From: {eu.formataddr((name, address))}
+            Date: {eu.format_datetime(timestamp)}
+            Subject: {subject}
+            Content-Type: text/plain; charset=UTF-8
+            """)
+        + (f"Message-ID: <{message_id}>\n" if message_id else "")
+        + (f"In-Reply-To: <{in_reply_to}>\n" if in_reply_to else "")
+        + (f"References: <{', '.join(references)}>\n" if references else "")
+        + "\n" + body)
 
 def format_issue(token, user, repo, number, options):
     issue = get_issue(token, user, repo, number, options)
     author = get_user(token, issue["author"]["login"])
 
-    heading = f"{user}/{repo}#{number}"
     result = format_email(author["name"] or author["login"], author["email"],
                           isoparse(issue["createdAt"]), issue["title"],
-                          issue["body"], options, heading)
+                          issue["body"], options, f"{user}/{repo}#{number}",
+                          f"{user}/{repo}/issues/{number}@github.com")
     if not options["comments"]:
         return result
-    return result + format_comments(issue["comments"]["nodes"],
-                                    f"Re: {issue['title']}", options, heading)
+    return result + format_comments(
+        issue["comments"]["nodes"], f"Re: {issue['title']}", options,
+        (user, repo, "issues", number))
 
 def format_pr(token, user, repo, number, options):
     pr = get_pr(token, user, repo, number, options)
     request = requests.get(f"{pr['url']}.patch")
     if request.status_code != 200:
         print(f"{pr['url']}: fail with {request.status_code}", file=sys.stderr)
-    result = request.text
+
+    thread_info = (user, repo, "pull", number)
+    result = re.sub(r"(\nSubject: .*\n)", r"\1"
+                    + f"Message-ID: <{'/'.join(thread_info)}@github.com>\n",
+                    request.text)
 
     if not options["comments"]:
         return result
-    return result + format_comments(pr["comments"]["nodes"],
-                                    f"Re: {pr['title']}", options,
-                                    f"{user}/{repo}#{number}")
+    return result + format_comments(
+        pr["comments"]["nodes"], f"Re: {pr['title']}", options, thread_info)
 
-def format_comments(comments, subject, options, heading="-"):
+def format_comments(comments, subject, options, thread_info):
+    user, repo, _, number = thread_info
+    thread_name = f"{user}/{repo}#{number}"
+
     result = ""
+    orig_message_id = f"{'/'.join(thread_info)}@github.com"
     for comment in comments:
         author = get_user(token, comment["author"]["login"])
+        message_id = f"{'/'.join(thread_info)}/c{comment['databaseId']}@github.com"
         result += "\n\n" + format_email(
             author["name"] or author["login"], author["email"],
             isoparse(comment["createdAt"]), subject, comment["body"], options,
-            heading
-        )
+            thread_name, message_id, orig_message_id)
     return result
 
 if __name__ == "__main__":
