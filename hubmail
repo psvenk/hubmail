@@ -149,6 +149,7 @@ def format_email(name, address, timestamp, subject, body, options,
         From: {eu.formataddr((name, address))}
         Date: {eu.format_datetime(timestamp)}
         Subject: {subject}
+        Content-Type: text/plain; charset=UTF-8
         \n""") + body
 
 def format_issue(token, user, repo, number, options):
