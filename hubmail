@@ -20,8 +20,12 @@ import re
 
 import requests
 from docopt import docopt
-from dotenv import load_dotenv
 from dateutil.parser import isoparse
+
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    pass
 
 # Maximum line length
 TEXTWIDTH = 72
@@ -178,7 +182,10 @@ if __name__ == "__main__":
     number = arguments["NUMBER"]
     include_comments = not arguments["-n"]
 
-    load_dotenv()
+    try:
+        load_dotenv()
+    except NameError:
+        pass
     token = os.getenv("HUBMAIL_TOKEN")
     if not token:
         print("No API token found. Have you set the HUBMAIL_TOKEN " +

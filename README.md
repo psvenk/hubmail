@@ -14,7 +14,9 @@ I would be eager to check it out!
 
 ## Dependencies
 
-Python 3 (latest version recommended), request, docopt, dotenv, dateutil
+Python 3 (latest version recommended), request, docopt, dateutil
+
+Optional: dotenv (for storing the API key in a `.env` file)
 
 ## Roadmap
 
