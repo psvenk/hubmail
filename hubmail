@@ -42,61 +42,104 @@ def run_query(token, query):
         return result
 
 def get_issue(token, user, repo, number, options):
-    query = f"""{{
-    repository(owner:"{user}", name:"{repo}") {{
-        issue(number:{number}) {{
-            title,
-            author {{
-                login
-            }},
-            body,
-            createdAt
-            { '''
-            comments(first:20) {
-                nodes {
-                    databaseId,
-                    author {
-                        login
-                    },
-                    body,
-                    createdAt
-                }
-            }
-            ''' if options['comments'] else '' }
-        }}
-    }}
-    }}"""
+    cursor = None
+    result = None
     try:
-        return run_query(token, query)["data"]["repository"]["issue"]
+        while True:
+            query = (f"""{{
+            repository(owner:"{user}", name:"{repo}") {{
+                issue(number:{number}) {{
+                    title,
+                    author {{
+                        login,
+                    }},
+                    body,
+                    createdAt,""" + (f"""
+                    comments(
+                            first:20""" +
+                         (f', after:"{cursor}"' if cursor else "") +
+                    f"""
+                    ) {{
+                        nodes {{
+                            databaseId,
+                            author {{
+                                login,
+                            }},
+                            body,
+                            createdAt,
+                        }},
+                        pageInfo {{
+                            endCursor,
+                        }},
+                    }},
+                    """ if options['comments'] else "") + f"""
+                }},
+            }},
+            }}""")
+
+            queryResult = run_query(token, query)["data"]["repository"]["issue"]
+            if not options["comments"]:
+                return queryResult
+            if not result:
+                result = queryResult
+            else:
+                result["comments"]["nodes"] += queryResult["comments"]["nodes"]
+
+            cursor = queryResult["comments"]["pageInfo"]["endCursor"]
+            if not cursor:
+                break
+        return result
     except Exception as e:
-        print(e, file=sys.stderr)
+        print(f"{e}\n{query}", file=sys.stderr)
         sys.exit(1)
 
 def get_pr(token, user, repo, number, options):
-    query = f"""{{
-    repository(owner:"{user}", name:"{repo}") {{
-        pullRequest(number:{number}) {{
-            url,
-            { '''
-            title,
-            comments(first:20) {
-                nodes {
-                    databaseId,
-                    author {
-                        login
-                    },
-                    body,
-                    createdAt
-                }
-            }
-            ''' if options['comments'] else '' }
-        }}
-    }}
-    }}"""
+    cursor = None
+    result = None
     try:
-        return run_query(token, query)["data"]["repository"]["pullRequest"]
+        while True:
+            query = (f"""{{
+            repository(owner:"{user}", name:"{repo}") {{
+                pullRequest(number:{number}) {{
+                    url,""" + (f"""
+                    title,
+                    comments(
+                            first:20""" +
+                         (f', after:"{cursor}"' if cursor else "") +
+                    f"""
+                    ) {{
+                        nodes {{
+                            databaseId,
+                            author {{
+                                login,
+                            }},
+                            body,
+                            createdAt,
+                        }},
+                        pageInfo {{
+                            endCursor,
+                        }},
+                    }},
+                    """ if options['comments'] else "") + f"""
+                }},
+            }},
+            }}""")
+
+            queryResult = run_query(token,
+                                    query)["data"]["repository"]["pullRequest"]
+            if not options["comments"]:
+                return queryResult
+            if not result:
+                result = queryResult
+            else:
+                result["comments"]["nodes"] += queryResult["comments"]["nodes"]
+
+            cursor = queryResult["comments"]["pageInfo"]["endCursor"]
+            if not cursor:
+                break
+        return result
     except Exception as e:
-        print(e, file=sys.stderr)
+        print(f"{e}\n{query}", file=sys.stderr)
         sys.exit(1)
 
 def get_user(token, login):

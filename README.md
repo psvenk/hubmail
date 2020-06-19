@@ -50,8 +50,13 @@ directory with the chosen filenames.
 
 ## Roadmap
 
-- Expand issue support
-- Deal with pagination
+- Allow user to specify number of comments as an argument to -c
+- Wrap to 72 chars if no argument provided but -w is provided
+  (make the argument to -w optional)
+  + N.B. these two may require switching from docopt to argparse
+- Replace `Exception`s with more descriptive errors (to avoid the overly broad
+  `except Exception:`)
+- Include non-comment actions; e.g., pull request reviews and merges
 - Keep track of rate limit and pause if it is reached
 - Multipart email support with HTML part
 - Add support for non-user actors (e.g. an organization or bot could leave
