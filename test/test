@@ -1,0 +1,18 @@
+#!/bin/sh
+. ./test/config
+
+rm -rf "$dir"
+mkdir "$dir"
+
+IFS='
+'
+for cmd in $cmds
+do
+	IFS=' '
+	./hubmail ${cmd%:*} >"${dir}/${cmd##*:}"
+done
+
+if [ -n "$all" ]
+then
+	cat $dir/* >"$dir/$all"
+fi

@@ -29,6 +29,25 @@ Optional: dotenv (for storing the API key in a `.env` file)
 
 [1]: https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line
 
+## Testing
+
+Create a file with contents like the following and put it at `test/config`:
+```sh
+#!/bin/sh
+dir=messages
+# Send all messages to this file (leave blank to disable)
+all=all.mbox
+
+# Format:
+# (issue|pr) [options] [--] USER REPO NUMBER:FILENAME
+cmds="
+issue -cw72 myuser myrepo 1:file1.mbox
+pr    -cw72 myuser myrepo 2:file1.mbox
+"
+```
+Then run `./test/test` to run `hubmail` and output files to the chosen
+directory with the chosen filenames.
+
 ## Roadmap
 
 - Expand issue support

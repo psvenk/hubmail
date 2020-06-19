@@ -2,3 +2,4 @@
 *.eml
 *.mbox
 *.patch
+test/config
