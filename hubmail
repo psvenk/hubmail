@@ -34,7 +34,7 @@ def run_query(token, query):
                             json={"query": query},
                             headers={"Authorization": f"Bearer {token}"})
     if request.status_code != 200:
-        raise Exception(f"Fail with {request.status_code}\n{query}")
+        raise Exception(f"Query failed with {request.status_code}:\n{query}")
     result = request.json()
 
     if "errors" in result:
@@ -79,11 +79,17 @@ def get_issue(token, user, repo, number, options):
             }},
             }}""")
 
+            ## Issue
             queryResult = run_query(token, query)["data"]["repository"]["issue"]
+            ## Issue!
+            assert queryResult is not None
+
             if options["comments"] == 0:
                 return queryResult
             elif not result:
                 result = queryResult
+            elif queryResult["comments"]["nodes"] is None:
+                queryResult["comments"]["nodes"] = []
             else:
                 result["comments"]["nodes"] += queryResult["comments"]["nodes"]
 
@@ -91,12 +97,16 @@ def get_issue(token, user, repo, number, options):
             if (options["comments"] is not None and
                     num_comments >= options["comments"]):
                 # Trim to proper number of comments
+                ## [IssueComment]!
                 result["comments"]["nodes"] = (
                     result["comments"]["nodes"][:options["comments"]])
+                ## Issue!
                 return result
 
+            ## String
             cursor = queryResult["comments"]["pageInfo"]["endCursor"]
             if not cursor:
+                ## Issue!
                 return result
     except Exception as e:
         print(f"{e}\n{query}", file=sys.stderr)
@@ -135,12 +145,18 @@ def get_pr(token, user, repo, number, options):
             }},
             }}""")
 
-            queryResult = run_query(token,
-                                    query)["data"]["repository"]["pullRequest"]
+            ## PullRequest
+            queryResult = run_query(
+                token, query)["data"]["repository"]["pullRequest"]
+            ## PullRequest!
+            assert queryResult is not None
+
             if options["comments"] == 0:
                 return queryResult
             elif not result:
                 result = queryResult
+            elif queryResult["comments"]["nodes"] is None:
+                queryResult["comments"]["nodes"] = []
             else:
                 result["comments"]["nodes"] += queryResult["comments"]["nodes"]
 
@@ -148,14 +164,17 @@ def get_pr(token, user, repo, number, options):
             if (options["comments"] is not None and
                     num_comments >= options["comments"]):
                 # Trim to proper number of comments
+                ## [IssueComment]!
                 result["comments"]["nodes"] = (
                     result["comments"]["nodes"][:options["comments"]])
+                ## PullRequest!
                 return result
 
+            ## String
             cursor = queryResult["comments"]["pageInfo"]["endCursor"]
             if not cursor:
+                ## PullRequest!
                 return result
-        return result
     except Exception as e:
         print(f"{e}\n{query}", file=sys.stderr)
         sys.exit(1)
@@ -169,10 +188,18 @@ def get_user(token, login):
     }}
     }}"""
     try:
-        return run_query(token, query)["data"]["user"]
+        ## User
+        result = run_query(token, query)["data"]["user"]
+        if result is not None:
+            ## User!
+            return result
+        else:
+            ## {login, name, email}!
+            return {"login": login, "name": login, "email": ""}
     except Exception as e:
-        print(e, file=sys.stderr)
-        sys.exit(1)
+        # TODO handle Organization
+        ## {login, name, email}!
+        return {"login": login, "name": login, "email": ""}
 
 def format_email(name, address, timestamp, subject, body, options,
                  heading, message_id=None, in_reply_to=None, references=None):
@@ -214,7 +241,9 @@ def format_email(name, address, timestamp, subject, body, options,
         + "\n" + body)
 
 def format_issue(token, user, repo, number, options):
+    ## Issue!
     issue = get_issue(token, user, repo, number, options)
+    ## User! | {login, name, email}!
     author = get_user(token, issue["author"]["login"])
 
     result = format_email(author["name"] or author["login"], author["email"],
@@ -224,10 +253,12 @@ def format_issue(token, user, repo, number, options):
     if options["comments"] == 0:
         return result
     return result + format_comments(
+        ## [IssueComment]!
         issue["comments"]["nodes"], f"Re: {issue['title']}", options,
         (user, repo, "issues", str(number)))
 
 def format_pr(token, user, repo, number, options):
+    ## PullRequest!
     pr = get_pr(token, user, repo, number, options)
     request = requests.get(f"{pr['url']}.patch")
     if request.status_code != 200:
@@ -241,15 +272,19 @@ def format_pr(token, user, repo, number, options):
     if options["comments"] == 0:
         return result
     return result + format_comments(
+        ## [IssueComment]!
         pr["comments"]["nodes"], f"Re: {pr['title']}", options, thread_info)
 
 def format_comments(comments, subject, options, thread_info):
+    ## comments: [IssueComment]!
+
     user, repo, _, number = thread_info
     thread_name = f"{user}/{repo}#{number}"
 
     result = ""
     orig_message_id = f"{'/'.join(thread_info)}@github.com"
     for comment in comments:
+        ## User! | {login, name, email}!
         author = get_user(token, comment["author"]["login"])
         message_id = f"{'/'.join(thread_info)}/c{comment['databaseId']}@github.com"
         result += "\n\n" + format_email(
