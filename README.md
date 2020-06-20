@@ -41,8 +41,8 @@ all=all.mbox
 # Format:
 # (issue|pr) [options] [--] USER REPO NUMBER:FILENAME
 cmds="
-issue -cw72 myuser myrepo 1:file1.mbox
-pr    -cw72 myuser myrepo 2:file1.mbox
+issue -c -w --  myuser myrepo 1:file1.mbox
+pr    -c20 -w72 myuser myrepo 2:file1.mbox
 "
 ```
 Then run `./test/test` to run `hubmail` and output files to the chosen
