@@ -29,6 +29,8 @@ try:
 except ModuleNotFoundError:
     pass
 
+NULL_ACTOR = {"login": "ghost", "name": "ghost", "email": "", "emailOrNull": ""}
+
 def run_query(token, query):
     request = requests.post("https://api.github.com/graphql",
                             json={"query": query},
@@ -53,7 +55,7 @@ def get_issue(token, user, repo, number, options):
                 issue(number:{number}) {{
                     title,
                     author {{
-                        login,
+                        ... actor,
                     }},
                     body,
                     createdAt,""" + (f"""
@@ -65,7 +67,7 @@ def get_issue(token, user, repo, number, options):
                         nodes {{
                             databaseId,
                             author {{
-                                login,
+                                ... actor,
                             }},
                             body,
                             createdAt,
@@ -77,7 +79,32 @@ def get_issue(token, user, repo, number, options):
                     """ if options["comments"] != 0 else "") + f"""
                 }},
             }},
-            }}""")
+            }}
+
+            fragment actor on Actor {{
+                ... on User {{
+                    login,
+                    name,
+                    email,
+                }},
+                ... on Organization {{
+                    login,
+                    name,
+                    emailOrNull: email,
+                }},
+                ... on Bot {{
+                    login,
+                }},
+                ... on Mannequin {{
+                    login,
+                    emailOrNull: email,
+                }},
+                ... on EnterpriseUserAccount {{
+                    login,
+                    name,
+                }},
+            }}
+            """)
 
             ## Issue
             queryResult = run_query(token, query)["data"]["repository"]["issue"]
@@ -131,7 +158,7 @@ def get_pr(token, user, repo, number, options):
                         nodes {{
                             databaseId,
                             author {{
-                                login,
+                                ... actor,
                             }},
                             body,
                             createdAt,
@@ -143,7 +170,32 @@ def get_pr(token, user, repo, number, options):
                     """ if options["comments"] != 0 else "") + f"""
                 }},
             }},
-            }}""")
+            }}
+
+            fragment actor on Actor {{
+                ... on User {{
+                    login,
+                    name,
+                    email,
+                }},
+                ... on Organization {{
+                    login,
+                    name,
+                    emailOrNull: email,
+                }},
+                ... on Bot {{
+                    login,
+                }},
+                ... on Mannequin {{
+                    login,
+                    emailOrNull: email,
+                }},
+                ... on EnterpriseUserAccount {{
+                    login,
+                    name,
+                }},
+            }}
+            """)
 
             ## PullRequest
             queryResult = run_query(
@@ -178,28 +230,6 @@ def get_pr(token, user, repo, number, options):
     except Exception as e:
         print(f"{e}\n{query}", file=sys.stderr)
         sys.exit(1)
-
-def get_user(token, login):
-    query = f"""{{
-    user(login:"{login}") {{
-        login,
-        name,
-        email
-    }}
-    }}"""
-    try:
-        ## User
-        result = run_query(token, query)["data"]["user"]
-        if result is not None:
-            ## User!
-            return result
-        else:
-            ## {login, name, email}!
-            return {"login": login, "name": login, "email": ""}
-    except Exception as e:
-        # TODO handle Organization
-        ## {login, name, email}!
-        return {"login": login, "name": login, "email": ""}
 
 def format_email(name, address, timestamp, subject, body, options,
                  heading, message_id=None, in_reply_to=None, references=None):
@@ -243,10 +273,12 @@ def format_email(name, address, timestamp, subject, body, options,
 def format_issue(token, user, repo, number, options):
     ## Issue!
     issue = get_issue(token, user, repo, number, options)
-    ## User! | {login, name, email}!
-    author = get_user(token, issue["author"]["login"])
+    ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
+    author = issue["author"] or NULL_ACTOR
 
-    result = format_email(author["name"] or author["login"], author["email"],
+    result = format_email(author.get("name") or author.get("login"),
+                          author.get("email") or author.get("emailOrNull")
+                          or "",
                           isoparse(issue["createdAt"]), issue["title"],
                           issue["body"], options, f"{user}/{repo}#{number}",
                           f"{user}/{repo}/issues/{number}@github.com")
@@ -284,11 +316,12 @@ def format_comments(comments, subject, options, thread_info):
     result = ""
     orig_message_id = f"{'/'.join(thread_info)}@github.com"
     for comment in comments:
-        ## User! | {login, name, email}!
-        author = get_user(token, comment["author"]["login"])
+        ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
+        author = comment["author"] or NULL_ACTOR
         message_id = f"{'/'.join(thread_info)}/c{comment['databaseId']}@github.com"
         result += "\n\n" + format_email(
-            author["name"] or author["login"], author["email"],
+            author.get("name") or author.get("login"),
+            author.get("email") or author.get("emailOrNull") or "",
             isoparse(comment["createdAt"]), subject, comment["body"], options,
             thread_name, message_id, orig_message_id)
     return result

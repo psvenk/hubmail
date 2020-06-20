@@ -57,10 +57,6 @@ directory with the chosen filenames.
 - Include non-comment actions; e.g., pull request reviews and merges
 - Keep track of rate limit and pause if it is reached
 - Multipart email support with HTML part
-- Add support for non-user actors (e.g. an organization or bot could leave
-  a comment)
-  + [The `author` field][0] is an [`Actor`][1], which does not necessarily have
-  to be a `User`
 
 And possibly:
 - Add support for edited issues
