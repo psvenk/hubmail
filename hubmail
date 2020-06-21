@@ -20,8 +20,9 @@ try:
 except ModuleNotFoundError:
     pass
 
-def eprint(*args, **kwargs):
+def fatal(*args, **kwargs):
     print(*args, **kwargs, file=sys.stderr)
+    sys.exit(1)
 
 
 class Hubmail:
@@ -39,9 +40,11 @@ class Hubmail:
         self.number = arguments.number
         self.comments = arguments.comments
         self.wrap = arguments.wrap
-        with open("queries.gql", "r") as queryFile:
-            # TODO try/except
-            self.query = queryFile.read()
+        try:
+            with open("queries.graphql", "r") as queryFile:
+                self.query = queryFile.read()
+        except OSError as e:
+            fatal(e)
 
     def run_query(self, opname, variables):
         request = requests.post(
@@ -104,8 +107,7 @@ class Hubmail:
                     ## Issue! | PullRequest!
                     return result
         except Exception as e:
-            eprint(f"{e}\n{query}")
-            sys.exit(1)
+            fatal(f"{e}\n{query}")
 
     def format_email(self, name, address, timestamp, subject, body, heading,
                      message_id=None, in_reply_to=None, references=None):
@@ -169,7 +171,7 @@ class Hubmail:
         pr = self.get_thread("pullRequest", user, repo, number)
         request = requests.get(f"{pr['url']}.patch")
         if request.status_code != 200:
-            eprint(f"{pr['url']}: fail with {request.status_code}")
+            fatal(f"{pr['url']}: fail with {request.status_code}")
 
         thread_info = (user, repo, "pull", str(number))
         result = re.sub(r"(\nSubject: .*\n)", r"\1"
@@ -207,9 +209,8 @@ class Hubmail:
             pass
         self.token = os.getenv("HUBMAIL_TOKEN")
         if not self.token:
-            eprint("No API token found. Have you set the HUBMAIL_TOKEN " +
+            fatal("No API token found. Have you set the HUBMAIL_TOKEN " +
                    "environment variable?")
-            sys.exit(1)
 
         if self.type == "issue":
             print(self.format_issue(self.user, self.repo, self.number))
