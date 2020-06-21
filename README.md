@@ -51,9 +51,6 @@ directory with the chosen filenames.
 ## Roadmap
 
 - Assign different message IDs to different commits in a pull request
-- Replace `Exception`s with more descriptive errors (to avoid the overly broad
-  `except Exception:`)
-- Factor out function for printing to stderr
 - Include non-comment actions; e.g., pull request reviews and merges
 - Keep track of rate limit and pause if it is reached
 - Multipart email support with HTML part

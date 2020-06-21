@@ -20,166 +20,202 @@ try:
 except ModuleNotFoundError:
     pass
 
-NULL_ACTOR = {"login": "ghost", "name": "ghost", "email": "", "emailOrNull": ""}
+def eprint(*args, **kwargs):
+    print(*args, **kwargs, file=sys.stderr)
 
-def run_query(token, opname, variables):
-    # TODO try/except; read query only once
-    with open("queries.gql", "r") as queryFile:
-        query = queryFile.read()
 
-    request = requests.post(
-        "https://api.github.com/graphql",
-        json={"query": query, "variables": variables, "operationName": opname},
-        headers={"Authorization": f"Bearer {token}"})
-    if request.status_code != 200:
-        raise Exception(f"Query {opname} failed with {request.status_code}")
-    result = request.json()
-
-    if "errors" in result:
-        raise Exception(result["errors"])
-    else:
-        return result
-
-def get_thread(token, thread_type, user, repo, number, options):
-    query = thread_type[0].upper() + thread_type[1:]
-    variables = {
-        "user": user, "repo": repo, "number": number,
-        "comments": (20 if options["comments"] is None
-                     or options["comments"] >= 20
-                     else options["comments"]),
-        "cursor": None
+class Hubmail:
+    NULL_ACTOR = {
+        "login": "ghost",
+        "name": "ghost",
+        "email": "",
+        "emailOrNull": ""
     }
-    result = None
-    num_comments = 0
-    try:
-        while not options["comments"] or num_comments < options["comments"]:
-            ## Issue | PullRequest
-            queryResult = (run_query(token, query, variables)
-                           ["data"]["repository"][thread_type])
-            ## Issue! | PullRequest!
-            assert queryResult is not None
 
-            if options["comments"] == 0:
-                return queryResult
-            elif not result:
-                result = queryResult
-            elif queryResult["comments"]["nodes"] is None:
-                queryResult["comments"]["nodes"] = []
-            else:
-                result["comments"]["nodes"] += queryResult["comments"]["nodes"]
+    def __init__(self, arguments):
+        self.type = arguments.type
+        self.user = arguments.user
+        self.repo = arguments.repo
+        self.number = arguments.number
+        self.comments = arguments.comments
+        self.wrap = arguments.wrap
+        with open("queries.gql", "r") as queryFile:
+            # TODO try/except
+            self.query = queryFile.read()
 
-            num_comments += len(queryResult["comments"]["nodes"])
-            if (options["comments"] is not None and
-                    num_comments >= options["comments"]):
-                # Trim to proper number of comments
-                ## [IssueComment]!
-                result["comments"]["nodes"] = (
-                    result["comments"]["nodes"][:options["comments"]])
+    def run_query(self, opname, variables):
+        request = requests.post(
+            "https://api.github.com/graphql",
+            json={
+                "query": self.query,
+                "variables": variables,
+                "operationName": opname
+            },
+            headers={"Authorization": f"Bearer {self.token}"})
+        if request.status_code != 200:
+            raise Exception(f"Query {opname} failed with {request.status_code}")
+        result = request.json()
+
+        if "errors" in result:
+            raise Exception(result["errors"])
+        else:
+            return result
+
+    def get_thread(self, thread_type, user, repo, number):
+        query = thread_type[0].upper() + thread_type[1:]
+        variables = {
+            "user": user, "repo": repo, "number": number,
+            "comments": (20 if self.comments is None or self.comments >= 20
+                         else self.comments),
+            "cursor": None
+        }
+        result = None
+        num_comments = 0
+        try:
+            while not self.comments or num_comments < self.comments:
+                ## Issue | PullRequest
+                queryResult = (self.run_query(query, variables)
+                               ["data"]["repository"][thread_type])
                 ## Issue! | PullRequest!
-                return result
+                assert queryResult is not None
 
-            ## String
-            variables["cursor"] = queryResult["comments"]["pageInfo"]["endCursor"]
-            if not variables["cursor"]:
-                ## Issue! | PullRequest!
-                return result
-    except Exception as e:
-        print(f"{e}\n{query}", file=sys.stderr)
-        sys.exit(1)
+                if self.comments == 0:
+                    return queryResult
+                elif not result:
+                    result = queryResult
+                elif queryResult["comments"]["nodes"] is None:
+                    queryResult["comments"]["nodes"] = []
+                else:
+                    result["comments"]["nodes"] += queryResult["comments"]["nodes"]
 
-def format_email(name, address, timestamp, subject, body, options,
-                 heading, message_id=None, in_reply_to=None, references=None):
-    if references is None and in_reply_to is not None:
-        references = [in_reply_to]
+                num_comments += len(queryResult["comments"]["nodes"])
+                if (self.comments is not None and
+                        num_comments >= self.comments):
+                    # Trim to proper number of comments
+                    ## [IssueComment]!
+                    result["comments"]["nodes"] = (
+                        result["comments"]["nodes"][:self.comments])
+                    ## Issue! | PullRequest!
+                    return result
 
-    body = body.replace("\r\n", "\n")
+                ## String
+                variables["cursor"] = queryResult["comments"]["pageInfo"]["endCursor"]
+                if not variables["cursor"]:
+                    ## Issue! | PullRequest!
+                    return result
+        except Exception as e:
+            eprint(f"{e}\n{query}")
+            sys.exit(1)
 
-    try:
-        cols = int(options["wrap"])
-    except ValueError:
-        cols = 0
-    if cols > 0:
-        body = "\n".join(
-            textwrap.fill(
-                line, cols, expand_tabs=False, replace_whitespace=False,
-                break_long_words=False, break_on_hyphens=False,
-                subsequent_indent=(
-                    "> " if line.startswith("> ")
-                    else ">" if line.startswith(">")
-                    else ""))
-            for line in body.splitlines())
+    def format_email(self, name, address, timestamp, subject, body, heading,
+                     message_id=None, in_reply_to=None, references=None):
+        if references is None and in_reply_to is not None:
+            references = [in_reply_to]
 
-    # Replace "From" at the beginning of a line with ">From";
-    # include any quoting so that this process is reversible.
-    body = re.sub(r"^([> ]*)From", r">\1From", body, flags=re.MULTILINE)
+        body = body.replace("\r\n", "\n")
 
-    return (
-        textwrap.dedent(f"""\
-            From nobody@localhost {asctime(gmtime(time()))}
-            From: {eu.formataddr((name, address))}
-            Date: {eu.format_datetime(timestamp)}
-            Subject: {subject}
-            Content-Type: text/plain; charset=UTF-8
-            """)
-        + (f"Message-ID: <{message_id}>\n" if message_id else "")
-        + (f"In-Reply-To: <{in_reply_to}>\n" if in_reply_to else "")
-        + (f"References: <{', '.join(references)}>\n" if references else "")
-        + "\n" + body)
+        try:
+            cols = int(self.wrap)
+        except ValueError:
+            cols = 0
+        if cols > 0:
+            body = "\n".join(
+                textwrap.fill(
+                    line, cols, expand_tabs=False, replace_whitespace=False,
+                    break_long_words=False, break_on_hyphens=False,
+                    subsequent_indent=(
+                        "> " if line.startswith("> ")
+                        else ">" if line.startswith(">")
+                        else ""))
+                for line in body.splitlines())
 
-def format_issue(token, user, repo, number, options):
-    ## Issue!
-    issue = get_thread(token, "issue", user, repo, number, options)
-    ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
-    author = issue["author"] or NULL_ACTOR
+        # Replace "From" at the beginning of a line with ">From";
+        # include any quoting so that this process is reversible.
+        body = re.sub(r"^([> ]*)From", r">\1From", body, flags=re.MULTILINE)
 
-    result = format_email(author.get("name") or author.get("login"),
-                          author.get("email") or author.get("emailOrNull")
-                          or "",
-                          isoparse(issue["createdAt"]), issue["title"],
-                          issue["body"], options, f"{user}/{repo}#{number}",
-                          f"{user}/{repo}/issues/{number}@github.com")
-    if options["comments"] == 0:
-        return result
-    return result + format_comments(
-        ## [IssueComment]!
-        issue["comments"]["nodes"], f"Re: {issue['title']}", options,
-        (user, repo, "issues", str(number)))
+        return (
+            textwrap.dedent(f"""\
+                From nobody@localhost {asctime(gmtime(time()))}
+                From: {eu.formataddr((name, address))}
+                Date: {eu.format_datetime(timestamp)}
+                Subject: {subject}
+                Content-Type: text/plain; charset=UTF-8
+                """)
+            + (f"Message-ID: <{message_id}>\n" if message_id else "")
+            + (f"In-Reply-To: <{in_reply_to}>\n" if in_reply_to else "")
+            + (f"References: <{', '.join(references)}>\n" if references else "")
+            + "\n" + body)
 
-def format_pr(token, user, repo, number, options):
-    ## PullRequest!
-    pr = get_thread(token, "pullRequest", user, repo, number, options)
-    request = requests.get(f"{pr['url']}.patch")
-    if request.status_code != 200:
-        print(f"{pr['url']}: fail with {request.status_code}", file=sys.stderr)
-
-    thread_info = (user, repo, "pull", str(number))
-    result = re.sub(r"(\nSubject: .*\n)", r"\1"
-                    + f"Message-ID: <{'/'.join(thread_info)}@github.com>\n",
-                    request.text)
-
-    if options["comments"] == 0:
-        return result
-    return result + format_comments(
-        ## [IssueComment]!
-        pr["comments"]["nodes"], f"Re: {pr['title']}", options, thread_info)
-
-def format_comments(comments, subject, options, thread_info):
-    ## comments: [IssueComment]!
-    user, repo, _, number = thread_info
-    thread_name = f"{user}/{repo}#{number}"
-
-    result = ""
-    orig_message_id = f"{'/'.join(thread_info)}@github.com"
-    for comment in comments:
+    def format_issue(self, user, repo, number):
+        ## Issue!
+        issue = self.get_thread("issue", user, repo, number)
         ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
-        author = comment["author"] or NULL_ACTOR
-        message_id = f"{'/'.join(thread_info)}/c{comment['databaseId']}@github.com"
-        result += "\n\n" + format_email(
-            author.get("name") or author.get("login"),
-            author.get("email") or author.get("emailOrNull") or "",
-            isoparse(comment["createdAt"]), subject, comment["body"], options,
-            thread_name, message_id, orig_message_id)
-    return result
+        author = issue["author"] or self.NULL_ACTOR
+
+        result = self.format_email(
+            author.get("name") or author.get("login"), author.get("email") or
+            author.get("emailOrNull") or "", isoparse(issue["createdAt"]),
+            issue["title"], issue["body"], f"{user}/{repo}#{number}",
+            f"{user}/{repo}/issues/{number}@github.com")
+        if self.comments == 0:
+            return result
+        return result + self.format_comments(
+            ## [IssueComment]!
+            issue["comments"]["nodes"], f"Re: {issue['title']}",
+            (user, repo, "issues", str(number)))
+
+    def format_pr(self, user, repo, number):
+        ## PullRequest!
+        pr = self.get_thread("pullRequest", user, repo, number)
+        request = requests.get(f"{pr['url']}.patch")
+        if request.status_code != 200:
+            eprint(f"{pr['url']}: fail with {request.status_code}")
+
+        thread_info = (user, repo, "pull", str(number))
+        result = re.sub(r"(\nSubject: .*\n)", r"\1"
+                        + f"Message-ID: <{'/'.join(thread_info)}@github.com>\n",
+                        request.text)
+
+        if self.comments == 0:
+            return result
+        return result + self.format_comments(
+            ## [IssueComment]!
+            pr["comments"]["nodes"], f"Re: {pr['title']}", thread_info)
+
+    def format_comments(self, comments, subject, thread_info):
+        ## comments: [IssueComment]!
+        user, repo, _, number = thread_info
+        thread_name = f"{user}/{repo}#{number}"
+
+        result = ""
+        orig_message_id = f"{'/'.join(thread_info)}@github.com"
+        for comment in comments:
+            ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
+            author = comment["author"] or self.NULL_ACTOR
+            message_id = f"{'/'.join(thread_info)}/c{comment['databaseId']}@github.com"
+            result += "\n\n" + self.format_email(
+                author.get("name") or author.get("login"),
+                author.get("email") or author.get("emailOrNull") or "",
+                isoparse(comment["createdAt"]), subject, comment["body"],
+                thread_name, message_id, orig_message_id)
+        return result
+
+    def _main(self):
+        try:
+            load_dotenv()
+        except NameError:
+            pass
+        self.token = os.getenv("HUBMAIL_TOKEN")
+        if not self.token:
+            eprint("No API token found. Have you set the HUBMAIL_TOKEN " +
+                   "environment variable?")
+            sys.exit(1)
+
+        if self.type == "issue":
+            print(self.format_issue(self.user, self.repo, self.number))
+        elif self.type == "pr":
+            print(self.format_pr(self.user, self.repo, self.number))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -212,21 +248,4 @@ if __name__ == "__main__":
             Wrap each line of text to %(metavar)s columns
             [default: 72 if -w provided]
             """))
-    args = vars(parser.parse_args())
-
-    try:
-        load_dotenv()
-    except NameError:
-        pass
-    token = os.getenv("HUBMAIL_TOKEN")
-    if not token:
-        print("No API token found. Have you set the HUBMAIL_TOKEN " +
-              "environment variable?", file=sys.stderr)
-        exit(1)
-
-    if args["type"] == "issue":
-        print(format_issue(token, args["user"], args["repo"],
-                           args["number"], args))
-    elif args["type"] == "pr":
-        print(format_pr(token, args["user"], args["repo"],
-                        args["number"], args))
+    Hubmail(parser.parse_args())._main()
