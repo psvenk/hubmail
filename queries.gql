@@ -1,0 +1,78 @@
+query Issue($user: String!, $repo: String!, $number: Int!, $comments: Int,
+$cursor: String) {
+  repository(owner: $user, name: $repo) {
+    issue(number:$number) {
+      title,
+      author {
+        ... actor,
+      },
+      body,
+      createdAt,
+      comments(first: $comments, after: $cursor) {
+        nodes {
+          databaseId,
+          author {
+            ... actor,
+          },
+          body,
+          createdAt,
+        },
+        pageInfo {
+          endCursor,
+        },
+      },
+    },
+  },
+}
+
+query PullRequest($user: String!, $repo: String!, $number: Int!, $comments: Int,
+$cursor: String) {
+  repository(owner: $user, name: $repo) {
+    pullRequest(number: $number) {
+      url,
+      title,
+      author {
+        ... actor,
+      },
+      body,
+      createdAt,
+      comments(first: $comments, after: $cursor) {
+        nodes {
+          databaseId,
+          author {
+            ... actor,
+          },
+          body,
+          createdAt,
+        },
+        pageInfo {
+          endCursor,
+        },
+      },
+    },
+  },
+}
+
+fragment actor on Actor {
+  ... on User {
+    login,
+    name,
+    email,
+  },
+  ... on Organization {
+    login,
+    name,
+    emailOrNull: email,
+  },
+  ... on Bot {
+    login,
+  },
+  ... on Mannequin {
+    login,
+    emailOrNull: email,
+  },
+  ... on EnterpriseUserAccount {
+    login,
+    name,
+  },
+}
