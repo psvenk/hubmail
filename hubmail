@@ -33,6 +33,7 @@ class Hubmail:
         "email": "",
         "emailOrNull": ""
     }
+    QUERY_FILE_NAME = "queries.graphql"
 
     def __init__(self, arguments):
         self.type = arguments.type
@@ -42,10 +43,10 @@ class Hubmail:
         self.comments = arguments.comments
         self.wrap = arguments.wrap
         try:
-            with open("queries.graphql", "r") as queryFile:
+            with open(self.QUERY_FILE_NAME, "r") as queryFile:
                 self.query = queryFile.read()
         except OSError as e:
-            fatal(e)
+            fatal(f"Could not open {self.QUERY_FILE_NAME} for reading")
 
     async def run_query(self, opname, variables):
         if not self.session:
@@ -62,53 +63,45 @@ class Hubmail:
         ) as resp:
             assert resp.status == 200
             result = await resp.json()
-            assert "errors" not in result
+            assert "errors" not in result, result["errors"]
             return result
 
     async def get_thread(self, thread_type, user, repo, number):
         query = thread_type[0].upper() + thread_type[1:]
+        variables = {"user": user, "repo": repo, "number": number}
+        result = ((await self.run_query(query, variables))
+                  ["data"]["repository"][thread_type])
+        assert result is not None
+        return result
+
+    async def get_comments(self, id):
         variables = {
-            "user": user, "repo": repo, "number": number,
-            "comments": (20 if self.comments is None or self.comments >= 20
-                         else self.comments),
+            "id": id,
+            "numComments": (20 if self.comments is None or self.comments >= 20
+                            else self.comments),
             "cursor": None
         }
+        total_comments = 0
         result = None
-        num_comments = 0
-        try:
-            while not self.comments or num_comments < self.comments:
-                ## Issue | PullRequest
-                queryResult = ((await self.run_query(query, variables))
-                                     ["data"]["repository"][thread_type])
-                ## Issue! | PullRequest!
-                assert queryResult is not None
+        while True:
+            ## [IssueComment]
+            queryResult = ((await self.run_query("Comments", variables))
+                           ["data"]["node"]["comments"])
 
-                if self.comments == 0:
-                    return queryResult
-                elif not result:
-                    result = queryResult
-                elif queryResult["comments"]["nodes"] is None:
-                    queryResult["comments"]["nodes"] = []
-                else:
-                    result["comments"]["nodes"] += queryResult["comments"]["nodes"]
+            if queryResult["nodes"] is None:
+                queryResult["nodes"] = []
+            if result is None:
+                result = queryResult["nodes"]
+            else:
+                result += queryResult["nodes"]
 
-                num_comments += len(queryResult["comments"]["nodes"])
-                if (self.comments is not None and
-                        num_comments >= self.comments):
-                    # Trim to proper number of comments
-                    ## [IssueComment]!
-                    result["comments"]["nodes"] = (
-                        result["comments"]["nodes"][:self.comments])
-                    ## Issue! | PullRequest!
-                    return result
+            total_comments += len(queryResult)
+            if self.comments is not None and total_comments >= self.comments:
+                return result[:self.comments]
 
-                ## String
-                variables["cursor"] = queryResult["comments"]["pageInfo"]["endCursor"]
-                if not variables["cursor"]:
-                    ## Issue! | PullRequest!
-                    return result
-        except Exception as e:
-            fatal(f"{e}\n{query}")
+            variables["cursor"] = queryResult["pageInfo"]["endCursor"]
+            if not variables["cursor"]:
+                return result
 
     def format_email(self, name, address, timestamp, subject, body, heading,
                      message_id=None, in_reply_to=None, references=None):
@@ -162,9 +155,8 @@ class Hubmail:
             f"{user}/{repo}/issues/{number}@github.com")
         if self.comments == 0:
             return result
-        return result + self.format_comments(
-            ## [IssueComment]!
-            issue["comments"]["nodes"], f"Re: {issue['title']}",
+        return result + await self.format_comments(
+            issue["id"], f"Re: {issue['title']}",
             (user, repo, "issues", str(number)))
 
     async def format_pr(self, user, repo, number):
@@ -181,13 +173,13 @@ class Hubmail:
 
         if self.comments == 0:
             return result
-        else:
-            return result + self.format_comments(
-                ## [IssueComment]!
-                pr["comments"]["nodes"], f"Re: {pr['title']}", thread_info)
+        return result + await self.format_comments(
+            pr["id"], f"Re: {pr['title']}", thread_info)
 
-    def format_comments(self, comments, subject, thread_info):
-        ## comments: [IssueComment]!
+    async def format_comments(self, id, subject, thread_info):
+        ## [IssueComment]!
+        comments = await self.get_comments(id)
+
         user, repo, _, number = thread_info
         thread_name = f"{user}/{repo}#{number}"
 

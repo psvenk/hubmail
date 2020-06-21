@@ -50,6 +50,8 @@ directory with the chosen filenames.
 
 ## Roadmap
 
+- Add support for including thread info in subject line (like GitHub
+  notification emails)
 - Add support for fetching all issues and PRs from a repository
 - Assign different message IDs to different commits in a pull request
 - Include non-comment actions; e.g., pull request reviews and merges

@@ -1,24 +1,21 @@
-query Issue($user: String!, $repo: String!, $number: Int!, $comments: Int,
-$cursor: String) {
+query Issue($user: String!, $repo: String!, $number: Int!) {
   repository(owner: $user, name: $repo) {
     issue(number:$number) {
+      id,
       title,
       author {
         ... actor,
       },
       body,
       createdAt,
-      comments(first: $comments, after: $cursor) {
-        ... comments,
-      },
     },
   },
 }
 
-query PullRequest($user: String!, $repo: String!, $number: Int!, $comments: Int,
-$cursor: String) {
+query PullRequest($user: String!, $repo: String!, $number: Int!) {
   repository(owner: $user, name: $repo) {
     pullRequest(number: $number) {
+      id,
       url,
       title,
       author {
@@ -26,7 +23,19 @@ $cursor: String) {
       },
       body,
       createdAt,
-      comments(first: $comments, after: $cursor) {
+    },
+  },
+}
+
+query Comments($id: ID!, $numComments: Int!, $cursor: String) {
+  node(id: $id) {
+    ... on Issue {
+      comments(first: $numComments, after: $cursor) {
+        ... comments,
+      },
+    },
+    ... on PullRequest {
+      comments(first: $numComments, after: $cursor) {
         ... comments,
       },
     },
