@@ -10,9 +10,10 @@ from time import time, gmtime, asctime
 import textwrap
 import itertools
 import re
-
-import requests
 import argparse
+import asyncio
+
+import aiohttp
 from dateutil.parser import isoparse
 
 try:
@@ -46,25 +47,25 @@ class Hubmail:
         except OSError as e:
             fatal(e)
 
-    def run_query(self, opname, variables):
-        request = requests.post(
+    async def run_query(self, opname, variables):
+        if not self.session:
+            fatal("No session initialized")
+
+        async with self.session.post(
             "https://api.github.com/graphql",
             json={
                 "query": self.query,
                 "variables": variables,
                 "operationName": opname
             },
-            headers={"Authorization": f"Bearer {self.token}"})
-        if request.status_code != 200:
-            raise Exception(f"Query {opname} failed with {request.status_code}")
-        result = request.json()
-
-        if "errors" in result:
-            raise Exception(result["errors"])
-        else:
+            headers={"Authorization": f"Bearer {self.token}"}
+        ) as resp:
+            assert resp.status == 200
+            result = await resp.json()
+            assert "errors" not in result
             return result
 
-    def get_thread(self, thread_type, user, repo, number):
+    async def get_thread(self, thread_type, user, repo, number):
         query = thread_type[0].upper() + thread_type[1:]
         variables = {
             "user": user, "repo": repo, "number": number,
@@ -77,8 +78,8 @@ class Hubmail:
         try:
             while not self.comments or num_comments < self.comments:
                 ## Issue | PullRequest
-                queryResult = (self.run_query(query, variables)
-                               ["data"]["repository"][thread_type])
+                queryResult = ((await self.run_query(query, variables))
+                                     ["data"]["repository"][thread_type])
                 ## Issue! | PullRequest!
                 assert queryResult is not None
 
@@ -148,9 +149,9 @@ class Hubmail:
             + (f"References: <{', '.join(references)}>\n" if references else "")
             + "\n" + body)
 
-    def format_issue(self, user, repo, number):
+    async def format_issue(self, user, repo, number):
         ## Issue!
-        issue = self.get_thread("issue", user, repo, number)
+        issue = await self.get_thread("issue", user, repo, number)
         ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
         author = issue["author"] or self.NULL_ACTOR
 
@@ -166,23 +167,24 @@ class Hubmail:
             issue["comments"]["nodes"], f"Re: {issue['title']}",
             (user, repo, "issues", str(number)))
 
-    def format_pr(self, user, repo, number):
+    async def format_pr(self, user, repo, number):
         ## PullRequest!
-        pr = self.get_thread("pullRequest", user, repo, number)
-        request = requests.get(f"{pr['url']}.patch")
-        if request.status_code != 200:
-            fatal(f"{pr['url']}: fail with {request.status_code}")
+        pr = await self.get_thread("pullRequest", user, repo, number)
 
-        thread_info = (user, repo, "pull", str(number))
-        result = re.sub(r"(\nSubject: .*\n)", r"\1"
-                        + f"Message-ID: <{'/'.join(thread_info)}@github.com>\n",
-                        request.text)
+        async with self.session.get(f"{pr['url']}.patch") as resp:
+            assert resp.status == 200
+            thread_info = (user, repo, "pull", str(number))
+            result = re.sub(
+                r"(\nSubject: .*\n)", r"\1"
+                + f"Message-ID: <{'/'.join(thread_info)}@github.com>\n",
+                await resp.text())
 
         if self.comments == 0:
             return result
-        return result + self.format_comments(
-            ## [IssueComment]!
-            pr["comments"]["nodes"], f"Re: {pr['title']}", thread_info)
+        else:
+            return result + self.format_comments(
+                ## [IssueComment]!
+                pr["comments"]["nodes"], f"Re: {pr['title']}", thread_info)
 
     def format_comments(self, comments, subject, thread_info):
         ## comments: [IssueComment]!
@@ -202,7 +204,7 @@ class Hubmail:
                 thread_name, message_id, orig_message_id)
         return result
 
-    def _main(self):
+    async def _main(self):
         try:
             load_dotenv()
         except NameError:
@@ -212,10 +214,13 @@ class Hubmail:
             fatal("No API token found. Have you set the HUBMAIL_TOKEN " +
                    "environment variable?")
 
-        if self.type == "issue":
-            print(self.format_issue(self.user, self.repo, self.number))
-        elif self.type == "pr":
-            print(self.format_pr(self.user, self.repo, self.number))
+        async with aiohttp.ClientSession() as self.session:
+            if self.type == "issue":
+                print(await self.format_issue(
+                    self.user, self.repo, self.number))
+            elif self.type == "pr":
+                print(await self.format_pr(
+                    self.user, self.repo, self.number))
 
 
 if __name__ == "__main__":
@@ -249,4 +254,4 @@ if __name__ == "__main__":
             Wrap each line of text to %(metavar)s columns
             [default: 72 if -w provided]
             """))
-    Hubmail(parser.parse_args())._main()
+    asyncio.run(Hubmail(parser.parse_args())._main())

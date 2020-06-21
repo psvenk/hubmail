@@ -9,17 +9,7 @@ $cursor: String) {
       body,
       createdAt,
       comments(first: $comments, after: $cursor) {
-        nodes {
-          databaseId,
-          author {
-            ... actor,
-          },
-          body,
-          createdAt,
-        },
-        pageInfo {
-          endCursor,
-        },
+        ... comments,
       },
     },
   },
@@ -37,19 +27,23 @@ $cursor: String) {
       body,
       createdAt,
       comments(first: $comments, after: $cursor) {
-        nodes {
-          databaseId,
-          author {
-            ... actor,
-          },
-          body,
-          createdAt,
-        },
-        pageInfo {
-          endCursor,
-        },
+        ... comments,
       },
     },
+  },
+}
+
+fragment comments on IssueCommentConnection {
+  nodes {
+    databaseId,
+    author {
+      ... actor,
+    },
+    body,
+    createdAt,
+  },
+  pageInfo {
+    endCursor,
   },
 }
 

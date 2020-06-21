@@ -1,0 +1,10 @@
+#!/bin/sh
+rm -f times
+
+i=0
+while [ "$i" -le 10 ]
+do
+	(time ./test/test) 2>&1 | sed -ne 's/\w\+\s\+\(.\+\)/\1/' -e '2p' \
+		>>"times"
+	i=$(( i + 1 ))
+done

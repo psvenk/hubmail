@@ -14,7 +14,7 @@ I would be eager to check it out!
 
 ## Dependencies
 
-Python 3 (latest version recommended), request, docopt, dateutil
+Python 3 (latest version recommended), aiohttp, dateutil
 
 Optional: dotenv (for storing the API key in a `.env` file)
 
@@ -50,6 +50,7 @@ directory with the chosen filenames.
 
 ## Roadmap
 
+- Add support for fetching all issues and PRs from a repository
 - Assign different message IDs to different commits in a pull request
 - Include non-comment actions; e.g., pull request reviews and merges
 - Keep track of rate limit and pause if it is reached
