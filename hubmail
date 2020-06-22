@@ -185,8 +185,8 @@ class Hubmail:
         issue = await self._get_thread("issue", user, repo, number)
         return await self._format_issue(user, repo, number, issue)
 
-    async def _format_pr(self, user, repo, number, pr):
-        async with self.session.get(f"{pr['url']}.patch") as resp:
+    async def _format_pull(self, user, repo, number, pull):
+        async with self.session.get(f"{pull['url']}.patch") as resp:
             assert resp.status == 200
             thread_info = (user, repo, "pull", str(number))
             result = re.sub(
@@ -196,12 +196,12 @@ class Hubmail:
         if self.comments == 0:
             return result
         return result + "\n\n".join([i async for i in self._format_comments(
-            pr["id"], f"Re: {pr['title']}", thread_info)])
+            pull["id"], f"Re: {pull['title']}", thread_info)])
 
-    async def format_pr(self, user, repo, number):
+    async def format_pull(self, user, repo, number):
         ## PullRequest!
-        pr = await self._get_thread("pullRequest", user, repo, number)
-        return await self._format_pr(user, repo, number, pr)
+        pull = await self._get_thread("pullRequest", user, repo, number)
+        return await self._format_pull(user, repo, number, pull)
 
     async def format_issues(self, user, repo, number):
         ## [Issue]!
@@ -209,11 +209,11 @@ class Hubmail:
             for issue in issues:
                 yield await self._format_issue(user, repo, number, issue)
 
-    async def format_prs(self, user, repo, number):
+    async def format_pulls(self, user, repo, number):
         ## [PullRequest]!
-        async for prs in self._get_thread("pullRequests", user, repo, number):
-            for pr in prs:
-                yield await self._format_pr(user, repo, number, pr)
+        async for pulls in self._get_thread("pullRequests", user, repo, number):
+            for pull in pulls:
+                yield await self._format_pull(user, repo, number, pull)
 
     async def _format_comments(self, id, subject, thread_info):
         user, repo, _, number = thread_info
@@ -247,8 +247,8 @@ class Hubmail:
             if self.type == "issue":
                 print(await self.format_issue(
                     self.user, self.repo, self.number))
-            elif self.type == "pr":
-                print(await self.format_pr(
+            elif self.type == "pull":
+                print(await self.format_pull(
                     self.user, self.repo, self.number))
             else:
                 fatal(f"Subcommand {self.type} not yet implemented")
@@ -286,22 +286,22 @@ if __name__ == "__main__":
     issue_parser = subparsers.add_parser(
         "issue", parents=[parent_parser],
         description="Export one issue in mbox format")
-    pr_parser = subparsers.add_parser(
-        "pr", parents=[parent_parser],
+    pull_parser = subparsers.add_parser(
+        "pull", parents=[parent_parser],
         description="Export one pull request in mbox format")
 
     issue_parser.add_argument(
         "number", metavar="NUMBER", type=int,
         help="The number of the issue")
-    pr_parser.add_argument(
+    pull_parser.add_argument(
         "number", metavar="NUMBER", type=int,
         help="The number of the pull request")
 
     issues_parser = subparsers.add_parser(
         "issues", parents=[parent_parser],
         description="Export issues from a repository in mbox format")
-    prs_parser = subparsers.add_parser(
-        "prs", parents=[parent_parser],
+    pulls_parser = subparsers.add_parser(
+        "pulls", parents=[parent_parser],
         description="Export pull requests from a repository in mbox format")
 
     asyncio.run(Hubmail(parser.parse_args()).main())
