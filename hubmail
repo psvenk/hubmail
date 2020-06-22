@@ -49,7 +49,7 @@ class Hubmail:
         except OSError as e:
             fatal(f"Could not open {self.QUERY_FILE_NAME} for reading")
 
-    async def run_query(self, opname, variables):
+    async def _run_query(self, opname, variables):
         if not self.session:
             fatal("No session initialized")
 
@@ -67,16 +67,16 @@ class Hubmail:
             assert "errors" not in result, result["errors"]
             return result
 
-    async def get_thread(self, thread_type, user, repo, number):
+    async def _get_thread(self, thread_type, user, repo, number):
         # thread_type is either "issue" or "pullRequest"
         query = thread_type[0].upper() + thread_type[1:]
         variables = {"user": user, "repo": repo, "number": number}
-        result = ((await self.run_query(query, variables))
+        result = ((await self._run_query(query, variables))
                   ["data"]["repository"][thread_type])
         assert result is not None
         return result
 
-    async def get_threads(self, threads_type, user, repo, number):
+    async def _get_threads(self, threads_type, user, repo, number):
         # threads_type is either "issues" or "pullRequests"
         query = thread_type[0].upper() + thread_type[1:]
         variables = {
@@ -87,7 +87,7 @@ class Hubmail:
         }
         while True:
             ## IssueConnection! | PullRequestConnection!
-            queryResult = ((await self.run_query("Issues", variables))
+            queryResult = ((await self._run_query("Issues", variables))
                            ["data"]["repository"][thread_type])
             self.total_threads += len(result["nodes"])
             if self.threads is None or self.total_threads <= self.threads:
@@ -100,7 +100,7 @@ class Hubmail:
             if not variables["cursor"]:
                 break
 
-    async def get_comments(self, id):
+    async def _get_comments(self, id):
         variables = {
             "id": id,
             "numComments": (20 if self.comments is None or self.comments >= 20
@@ -110,7 +110,7 @@ class Hubmail:
         total_comments = 0
         while True:
             ## IssueCommentConnection!
-            result = ((await self.run_query("Comments", variables))
+            result = ((await self._run_query("Comments", variables))
                            ["data"]["node"]["comments"])
             total_comments += len(result["nodes"])
             if self.comments is None or total_comments <= self.comments:
@@ -124,7 +124,7 @@ class Hubmail:
             if not variables["cursor"]:
                 break
 
-    def format_email(self, name, address, timestamp, subject, body, heading,
+    def _format_email(self, name, address, timestamp, subject, body, heading,
                      message_id=None, in_reply_to=None, references=None):
         if references is None and in_reply_to is not None:
             references = [in_reply_to]
@@ -163,26 +163,26 @@ class Hubmail:
             + (f"References: <{', '.join(references)}>\n" if references else "")
             + "\n" + body)
 
-    async def format_issue(self, user, repo, number):
-        ## Issue!
-        issue = await self.get_thread("issue", user, repo, number)
-        ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
+    async def _format_issue(self, user, repo, number, issue):
         author = issue["author"] or self.NULL_ACTOR
-
-        result = self.format_email(
+        result = self._format_email(
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(issue["createdAt"]),
             issue["title"], issue["body"], f"{user}/{repo}#{number}",
             f"{user}/{repo}/issues/{number}@github.com")
         if self.comments == 0:
             return result
-        return result + "\n\n".join([i async for i in self.format_comments(
+        return result + "\n\n".join([i async for i in self._format_comments(
             issue["id"], f"Re: {issue['title']}",
             (user, repo, "issues", str(number)))])
 
+    async def format_issue(self, user, repo, number):
+        issue = await self._get_thread("issue", user, repo, number)
+        return await self._format_issue(user, repo, number, issue)
+
     async def format_pr(self, user, repo, number):
         ## PullRequest!
-        pr = await self.get_thread("pullRequest", user, repo, number)
+        pr = await self._get_thread("pullRequest", user, repo, number)
 
         async with self.session.get(f"{pr['url']}.patch") as resp:
             assert resp.status == 200
@@ -194,47 +194,34 @@ class Hubmail:
 
         if self.comments == 0:
             return result
-        return result + "\n\n".join([i async for i in self.format_comments(
+        return result + "\n\n".join([i async for i in self._format_comments(
             pr["id"], f"Re: {pr['title']}", thread_info)])
 
     async def format_issues(self, user, repo, number):
         ## [Issue]!
-        async for issues in self.get_thread("issues", user, repo, number):
+        async for issues in self._get_thread("issues", user, repo, number):
             for issue in issues:
-                author = issue["author"] or self.NULL_ACTOR
-                result = self.format_email(
-                    author.get("name") or author.get("login"),
-                    author.get("email") or author.get("emailOrNull") or "",
-                    isoparse(issue["createdAt"]), issue["title"],
-                    issue["body"], f"{user}/{repo}#{number}",
-                    f"{user}/{repo}/issues/{number}@github.com")
-                if self.comments == 0:
-                    yield result
-                else:
-                    yield result + "\n\n".join([
-                        i async for i in self.format_comments(
-                            issue["id"], f"Re: {issue['title']}",
-                            (user, repo, "issues", str(number)))])
+                yield await self._format_issue(user, repo, number, issue)
 
-    async def format_comments(self, id, subject, thread_info):
+    async def _format_comments(self, id, subject, thread_info):
         user, repo, _, number = thread_info
         thread_name = f"{user}/{repo}#{number}"
         ## [IssueComment]!
-        async for comments in self.get_comments(id):
+        async for comments in self._get_comments(id):
             result = ""
             orig_message_id = f"{'/'.join(thread_info)}@github.com"
             for comment in comments:
                 ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
                 author = comment["author"] or self.NULL_ACTOR
                 message_id = f"{'/'.join(thread_info)}/c{comment['databaseId']}@github.com"
-                result += "\n\n" + self.format_email(
+                result += "\n\n" + self._format_email(
                     author.get("name") or author.get("login"),
                     author.get("email") or author.get("emailOrNull") or "",
                     isoparse(comment["createdAt"]), subject, comment["body"],
                     thread_name, message_id, orig_message_id)
             yield result
 
-    async def _main(self):
+    async def main(self):
         try:
             load_dotenv()
         except NameError:
@@ -284,4 +271,4 @@ if __name__ == "__main__":
             Wrap each line of text to %(metavar)s columns
             [default: 72 if -w provided]
             """))
-    asyncio.run(Hubmail(parser.parse_args())._main())
+    asyncio.run(Hubmail(parser.parse_args()).main())
