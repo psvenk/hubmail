@@ -1,7 +1,7 @@
-query Issues($user: String!, $repo: String!, $numIssues: Int!,
+query Issues($user: String!, $repo: String!, $numThreads: Int!,
 $cursor: String) {
   repository(owner: $user, name: $repo) {
-    issues(first: $numIssues, after: $cursor) {
+    issues(first: $numThreads, after: $cursor) {
       nodes {
         ... issue,
       },
@@ -12,10 +12,10 @@ $cursor: String) {
   },
 }
 
-query PullRequests($user: String!, $repo: String!, $numPullRequests: Int!,
+query PullRequests($user: String!, $repo: String!, $numThreads: Int!,
 $cursor: String) {
   repository(owner: $user, name: $repo) {
-    pullRequests(first: $numPullRequests, after: $cursor) {
+    pullRequests(first: $numThreads, after: $cursor) {
       nodes {
         ... pullRequest,
       },
@@ -59,6 +59,7 @@ query Comments($id: ID!, $numComments: Int!, $cursor: String) {
 
 fragment issue on Issue {
   id,
+  number,
   title,
   author {
     ... actor,
@@ -69,6 +70,7 @@ fragment issue on Issue {
 
 fragment pullRequest on PullRequest {
   id,
+  number,
   url,
   title,
   author {

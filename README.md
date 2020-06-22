@@ -29,6 +29,14 @@ This may also work on Python 3.7, but I have not tested that.
    `.env` with the line `HUBMAIL_TOKEN=your_token_here`.
 3. Run `./hubmail` for usage information.
 
+For example, to fetch all issues and pull requests from `user/repo`, wrapped to
+72 characters and with the first 20 comments on each, output to the file
+`repo.mbox`:
+```console
+$ ./hubmail issues -c20 -w72 user repo >  repo.mbox
+$ ./hubmail pulls  -c20 -w72 user repo >> repo.mbox
+```
+
 [1]: https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line
 
 ## Testing
@@ -52,9 +60,9 @@ directory with the chosen filenames.
 
 ## Roadmap
 
+- Allow fetching the last N issues/pull requests instead of the first N
 - Add support for including thread info in subject line (like GitHub
   notification emails)
-- Add support for fetching all issues and PRs from a repository
 - Assign different message IDs to different commits in a pull request
 - Include non-comment actions; e.g., pull request reviews and merges
 - Keep track of rate limit and pause if it is reached
@@ -65,8 +73,11 @@ And possibly:
   + It may be useful just to act as if the issue was never edited, as Git does
   with commits
 
-[0]: https://developer.github.com/v4/interface/comment/
-[1]: https://developer.github.com/v4/interface/actor/
+## Bugs
+
+- If a commit in a pull request has a subject spanning multiple lines, the
+  message ID is put after the first line
+  + Maybe this can be solved by using `email.message.EmailMessage`
 
 ## License
 

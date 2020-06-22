@@ -46,6 +46,10 @@ class Hubmail:
             self.number = arguments.number
         except AttributeError:
             pass
+        try:
+            self.threads = arguments.threads
+        except AttributeError:
+            pass
 
         self.total_threads = 0
         try:
@@ -81,19 +85,19 @@ class Hubmail:
         assert result is not None
         return result
 
-    async def _get_threads(self, threads_type, user, repo, number):
+    async def _get_threads(self, threads_type, user, repo):
         # threads_type is either "issues" or "pullRequests"
-        query = thread_type[0].upper() + thread_type[1:]
+        query = threads_type[0].upper() + threads_type[1:]
         variables = {
-            "user": user, "repo": repo, "number": number,
+            "user": user, "repo": repo,
             "numThreads": (20 if self.threads is None or self.threads >= 20
                            else self.threads),
             "cursor": None
         }
         while True:
             ## IssueConnection! | PullRequestConnection!
-            queryResult = ((await self._run_query("Issues", variables))
-                           ["data"]["repository"][thread_type])
+            result = ((await self._run_query(query, variables))
+                           ["data"]["repository"][threads_type])
             self.total_threads += len(result["nodes"])
             if self.threads is None or self.total_threads <= self.threads:
                 yield result["nodes"] or []
@@ -168,8 +172,10 @@ class Hubmail:
             + (f"References: <{', '.join(references)}>\n" if references else "")
             + "\n" + body)
 
-    async def _format_issue(self, user, repo, number, issue):
+    async def _format_issue(self, user, repo, issue):
+        number = issue["number"]
         author = issue["author"] or self.NULL_ACTOR
+        assert number and author
         result = self._format_email(
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(issue["createdAt"]),
@@ -185,7 +191,9 @@ class Hubmail:
         issue = await self._get_thread("issue", user, repo, number)
         return await self._format_issue(user, repo, number, issue)
 
-    async def _format_pull(self, user, repo, number, pull):
+    async def _format_pull(self, user, repo, pull):
+        number = pull["number"]
+        assert number
         async with self.session.get(f"{pull['url']}.patch") as resp:
             assert resp.status == 200
             thread_info = (user, repo, "pull", str(number))
@@ -201,19 +209,25 @@ class Hubmail:
     async def format_pull(self, user, repo, number):
         ## PullRequest!
         pull = await self._get_thread("pullRequest", user, repo, number)
-        return await self._format_pull(user, repo, number, pull)
+        return await self._format_pull(pull)
 
-    async def format_issues(self, user, repo, number):
+    async def _format_issues(self, user, repo):
         ## [Issue]!
-        async for issues in self._get_threads("issues", user, repo, number):
+        async for issues in self._get_threads("issues", user, repo):
             for issue in issues:
-                yield await self._format_issue(user, repo, number, issue)
+                yield await self._format_issue(user, repo, issue)
 
-    async def format_pulls(self, user, repo, number):
+    async def format_issues(self, user, repo):
+        return "\n\n".join([i async for i in self._format_issues(user, repo)])
+
+    async def _format_pulls(self, user, repo):
         ## [PullRequest]!
-        async for pulls in self._get_thread("pullRequests", user, repo, number):
+        async for pulls in self._get_threads("pullRequests", user, repo):
             for pull in pulls:
-                yield await self._format_pull(user, repo, number, pull)
+                yield await self._format_pull(user, repo, pull)
+
+    async def format_pulls(self, user, repo):
+        return "\n\n".join([i async for i in self._format_pulls(user, repo)])
 
     async def _format_comments(self, id, subject, thread_info):
         user, repo, _, number = thread_info
@@ -250,6 +264,10 @@ class Hubmail:
             elif self.type == "pull":
                 print(await self.format_pull(
                     self.user, self.repo, self.number))
+            elif self.type == "issues":
+                print(await self.format_issues(self.user, self.repo))
+            elif self.type == "pulls":
+                print(await self.format_pulls(self.user, self.repo))
             else:
                 fatal(f"Subcommand {self.type} not yet implemented")
 
@@ -297,11 +315,25 @@ if __name__ == "__main__":
         "number", metavar="NUMBER", type=int,
         help="The number of the pull request")
 
+    repo_parent_parser = argparse.ArgumentParser(
+        add_help=False, parents=[parent_parser])
+
     issues_parser = subparsers.add_parser(
-        "issues", parents=[parent_parser],
+        "issues", parents=[repo_parent_parser],
         description="Export issues from a repository in mbox format")
     pulls_parser = subparsers.add_parser(
-        "pulls", parents=[parent_parser],
+        "pulls", parents=[repo_parent_parser],
         description="Export pull requests from a repository in mbox format")
+
+    issues_parser.add_argument(
+        "-t", "--threads", metavar="N", type=int,
+        help=textwrap.dedent("""\
+            Include the first %(metavar)s threads [default: all threads]
+            """))
+    pulls_parser.add_argument(
+        "-t", "--threads", metavar="N", type=int,
+        help=textwrap.dedent("""\
+            Include the first %(metavar)s threads [default: all threads]
+            """))
 
     asyncio.run(Hubmail(parser.parse_args()).main())
