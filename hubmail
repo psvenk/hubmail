@@ -82,26 +82,21 @@ class Hubmail:
             "cursor": None
         }
         total_comments = 0
-        result = None
         while True:
-            ## [IssueComment]
-            queryResult = ((await self.run_query("Comments", variables))
+            ## IssueCommentConnection!
+            result = ((await self.run_query("Comments", variables))
                            ["data"]["node"]["comments"])
-
-            if queryResult["nodes"] is None:
-                queryResult["nodes"] = []
-            if result is None:
-                result = queryResult["nodes"]
+            total_comments += len(result["nodes"])
+            if self.comments is None or total_comments <= self.comments:
+                yield result["nodes"] or []
             else:
-                result += queryResult["nodes"]
-
-            total_comments += len(queryResult)
-            if self.comments is not None and total_comments >= self.comments:
-                return result[:self.comments]
-
-            variables["cursor"] = queryResult["pageInfo"]["endCursor"]
+                # Remove the excess comments
+                yield result["nodes"][:-(total_comments - self.comments)]
+                break
+            # Get new cursor; break if end of comments reached
+            variables["cursor"] = result["pageInfo"]["endCursor"]
             if not variables["cursor"]:
-                return result
+                break
 
     def format_email(self, name, address, timestamp, subject, body, heading,
                      message_id=None, in_reply_to=None, references=None):
@@ -155,9 +150,9 @@ class Hubmail:
             f"{user}/{repo}/issues/{number}@github.com")
         if self.comments == 0:
             return result
-        return result + await self.format_comments(
+        return result + "\n\n".join([i async for i in self.format_comments(
             issue["id"], f"Re: {issue['title']}",
-            (user, repo, "issues", str(number)))
+            (user, repo, "issues", str(number)))])
 
     async def format_pr(self, user, repo, number):
         ## PullRequest!
@@ -173,28 +168,26 @@ class Hubmail:
 
         if self.comments == 0:
             return result
-        return result + await self.format_comments(
-            pr["id"], f"Re: {pr['title']}", thread_info)
+        return result + "\n\n".join([i async for i in self.format_comments(
+            pr["id"], f"Re: {pr['title']}", thread_info)])
 
     async def format_comments(self, id, subject, thread_info):
-        ## [IssueComment]!
-        comments = await self.get_comments(id)
-
         user, repo, _, number = thread_info
         thread_name = f"{user}/{repo}#{number}"
-
-        result = ""
-        orig_message_id = f"{'/'.join(thread_info)}@github.com"
-        for comment in comments:
-            ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
-            author = comment["author"] or self.NULL_ACTOR
-            message_id = f"{'/'.join(thread_info)}/c{comment['databaseId']}@github.com"
-            result += "\n\n" + self.format_email(
-                author.get("name") or author.get("login"),
-                author.get("email") or author.get("emailOrNull") or "",
-                isoparse(comment["createdAt"]), subject, comment["body"],
-                thread_name, message_id, orig_message_id)
-        return result
+        ## [IssueComment]!
+        async for comments in self.get_comments(id):
+            result = ""
+            orig_message_id = f"{'/'.join(thread_info)}@github.com"
+            for comment in comments:
+                ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
+                author = comment["author"] or self.NULL_ACTOR
+                message_id = f"{'/'.join(thread_info)}/c{comment['databaseId']}@github.com"
+                result += "\n\n" + self.format_email(
+                    author.get("name") or author.get("login"),
+                    author.get("email") or author.get("emailOrNull") or "",
+                    isoparse(comment["createdAt"]), subject, comment["body"],
+                    thread_name, message_id, orig_message_id)
+            yield result
 
     async def _main(self):
         try:

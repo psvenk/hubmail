@@ -14,9 +14,11 @@ I would be eager to check it out!
 
 ## Dependencies
 
-Python 3 (latest version recommended), aiohttp, dateutil
+Python 3.8, aiohttp, dateutil
 
 Optional: dotenv (for storing the API key in a `.env` file)
+
+This may also work on Python 3.7, but I have not tested that.
 
 ## Usage
 
