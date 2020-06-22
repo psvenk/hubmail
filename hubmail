@@ -138,7 +138,7 @@ class Hubmail:
 
         try:
             cols = int(self.wrap)
-        except ValueError:
+        except (ValueError, TypeError):
             cols = 0
         if cols > 0:
             body = "\n".join(
