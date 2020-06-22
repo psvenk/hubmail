@@ -1,13 +1,35 @@
+query Issues($user: String!, $repo: String!, $numIssues: Int!,
+$cursor: String) {
+  repository(owner: $user, name: $repo) {
+    issues(first: $numIssues, after: $cursor) {
+      nodes {
+        ... issue,
+      },
+      pageInfo {
+        endCursor,
+      },
+    },
+  },
+}
+
+query PullRequests($user: String!, $repo: String!, $numPullRequests: Int!,
+$cursor: String) {
+  repository(owner: $user, name: $repo) {
+    pullRequests(first: $numPullRequests, after: $cursor) {
+      nodes {
+        ... pullRequest,
+      },
+      pageInfo {
+        endCursor,
+      },
+    },
+  }
+}
+
 query Issue($user: String!, $repo: String!, $number: Int!) {
   repository(owner: $user, name: $repo) {
     issue(number:$number) {
-      id,
-      title,
-      author {
-        ... actor,
-      },
-      body,
-      createdAt,
+      ... issue,
     },
   },
 }
@@ -15,14 +37,7 @@ query Issue($user: String!, $repo: String!, $number: Int!) {
 query PullRequest($user: String!, $repo: String!, $number: Int!) {
   repository(owner: $user, name: $repo) {
     pullRequest(number: $number) {
-      id,
-      url,
-      title,
-      author {
-        ... actor,
-      },
-      body,
-      createdAt,
+      ... pullRequest,
     },
   },
 }
@@ -40,6 +55,27 @@ query Comments($id: ID!, $numComments: Int!, $cursor: String) {
       },
     },
   },
+}
+
+fragment issue on Issue {
+  id,
+  title,
+  author {
+    ... actor,
+  },
+  body,
+  createdAt,
+}
+
+fragment pullRequest on PullRequest {
+  id,
+  url,
+  title,
+  author {
+    ... actor,
+  },
+  body,
+  createdAt,
 }
 
 fragment comments on IssueCommentConnection {

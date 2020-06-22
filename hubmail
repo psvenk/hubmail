@@ -42,6 +42,7 @@ class Hubmail:
         self.number = arguments.number
         self.comments = arguments.comments
         self.wrap = arguments.wrap
+        self.total_threads = 0
         try:
             with open(self.QUERY_FILE_NAME, "r") as queryFile:
                 self.query = queryFile.read()
@@ -67,12 +68,37 @@ class Hubmail:
             return result
 
     async def get_thread(self, thread_type, user, repo, number):
+        # thread_type is either "issue" or "pullRequest"
         query = thread_type[0].upper() + thread_type[1:]
         variables = {"user": user, "repo": repo, "number": number}
         result = ((await self.run_query(query, variables))
                   ["data"]["repository"][thread_type])
         assert result is not None
         return result
+
+    async def get_threads(self, threads_type, user, repo, number):
+        # threads_type is either "issues" or "pullRequests"
+        query = thread_type[0].upper() + thread_type[1:]
+        variables = {
+            "user": user, "repo": repo, "number": number,
+            "numThreads": (20 if self.threads is None or self.threads >= 20
+                           else self.threads),
+            "cursor": None
+        }
+        while True:
+            ## IssueConnection! | PullRequestConnection!
+            queryResult = ((await self.run_query("Issues", variables))
+                           ["data"]["repository"][thread_type])
+            self.total_threads += len(result["nodes"])
+            if self.threads is None or self.total_threads <= self.threads:
+                yield result["nodes"] or []
+            else:
+                # Remove the excess threads
+                yield result["nodes"][:-(self.total_threads - self.threads)]
+                break
+            variables["cursor"] = result["pageInfo"]["endCursor"]
+            if not variables["cursor"]:
+                break
 
     async def get_comments(self, id):
         variables = {
@@ -170,6 +196,25 @@ class Hubmail:
             return result
         return result + "\n\n".join([i async for i in self.format_comments(
             pr["id"], f"Re: {pr['title']}", thread_info)])
+
+    async def format_issues(self, user, repo, number):
+        ## [Issue]!
+        async for issues in self.get_thread("issues", user, repo, number):
+            for issue in issues:
+                author = issue["author"] or self.NULL_ACTOR
+                result = self.format_email(
+                    author.get("name") or author.get("login"),
+                    author.get("email") or author.get("emailOrNull") or "",
+                    isoparse(issue["createdAt"]), issue["title"],
+                    issue["body"], f"{user}/{repo}#{number}",
+                    f"{user}/{repo}/issues/{number}@github.com")
+                if self.comments == 0:
+                    yield result
+                else:
+                    yield result + "\n\n".join([
+                        i async for i in self.format_comments(
+                            issue["id"], f"Re: {issue['title']}",
+                            (user, repo, "issues", str(number)))])
 
     async def format_comments(self, id, subject, thread_info):
         user, repo, _, number = thread_info
