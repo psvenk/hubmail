@@ -16,9 +16,10 @@ I would be eager to check it out!
 
 Python 3.8, aiohttp, dateutil
 
-Optional: dotenv (for storing the API key in a `.env` file)
+Optional: dotenv (for storing the API key in a `.env` file), POSIX-compliant
+shell (for running the testing script)
 
-This may also work on Python 3.7, but I have not tested that.
+`hubmail` may also work on Python 3.7, but I have not tested it there.
 
 ## Usage
 
@@ -27,7 +28,8 @@ This may also work on Python 3.7, but I have not tested that.
 2. Set the environment variable `HUBMAIL_TOKEN` to your token. If you have the
    Python `dotenv` library installed, you can alternatively create a file
    `.env` with the line `HUBMAIL_TOKEN=your_token_here`.
-3. Run `./hubmail` for usage information.
+3. Run `./hubmail -h` for usage information, and `./hubmail SUBCOMMAND -h` for
+   usage information for a subcommand (e.g. `issue`, `pull`).
 
 For example, to fetch all issues and pull requests from `user/repo`, wrapped to
 72 characters and with the first 20 comments on each, output to the file
