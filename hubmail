@@ -36,12 +36,17 @@ class Hubmail:
     QUERY_FILE_NAME = "queries.graphql"
 
     def __init__(self, arguments):
-        self.type = arguments.type
+        self.type = arguments.subcommand
         self.user = arguments.user
         self.repo = arguments.repo
-        self.number = arguments.number
         self.comments = arguments.comments
         self.wrap = arguments.wrap
+
+        try:
+            self.number = arguments.number
+        except AttributeError:
+            pass
+
         self.total_threads = 0
         try:
             with open(self.QUERY_FILE_NAME, "r") as queryFile:
@@ -180,10 +185,7 @@ class Hubmail:
         issue = await self._get_thread("issue", user, repo, number)
         return await self._format_issue(user, repo, number, issue)
 
-    async def format_pr(self, user, repo, number):
-        ## PullRequest!
-        pr = await self._get_thread("pullRequest", user, repo, number)
-
+    async def _format_pr(self, user, repo, number, pr):
         async with self.session.get(f"{pr['url']}.patch") as resp:
             assert resp.status == 200
             thread_info = (user, repo, "pull", str(number))
@@ -191,17 +193,27 @@ class Hubmail:
                 r"(\nSubject: .*\n)", r"\1"
                 + f"Message-ID: <{'/'.join(thread_info)}@github.com>\n",
                 await resp.text())
-
         if self.comments == 0:
             return result
         return result + "\n\n".join([i async for i in self._format_comments(
             pr["id"], f"Re: {pr['title']}", thread_info)])
 
+    async def format_pr(self, user, repo, number):
+        ## PullRequest!
+        pr = await self._get_thread("pullRequest", user, repo, number)
+        return await self._format_pr(user, repo, number, pr)
+
     async def format_issues(self, user, repo, number):
         ## [Issue]!
-        async for issues in self._get_thread("issues", user, repo, number):
+        async for issues in self._get_threads("issues", user, repo, number):
             for issue in issues:
                 yield await self._format_issue(user, repo, number, issue)
+
+    async def format_prs(self, user, repo, number):
+        ## [PullRequest]!
+        async for prs in self._get_thread("pullRequests", user, repo, number):
+            for pr in prs:
+                yield await self._format_pr(user, repo, number, pr)
 
     async def _format_comments(self, id, subject, thread_info):
         user, repo, _, number = thread_info
@@ -238,37 +250,58 @@ class Hubmail:
             elif self.type == "pr":
                 print(await self.format_pr(
                     self.user, self.repo, self.number))
+            else:
+                fatal(f"Subcommand {self.type} not yet implemented")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=textwrap.dedent(f"""\
-            %(prog)s: Export GitHub issues and pull requests as email messages.
-            The output is in mbox format as specified in RFC 4155.
+            Export GitHub issues and pull requests as email messages
+            in mbox format (RFC 4155).
             """))
-    parser.add_argument(
-        "type", choices=("issue", "pr"),
-        help="Whether to fetch an issue or a pull request")
-    parser.add_argument(
+    subparsers = parser.add_subparsers(
+        title="subcommands", dest="subcommand", required=True)
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument(
         "user", metavar="USER",
         help="The username of the owner of the repository")
-    parser.add_argument(
+    parent_parser.add_argument(
         "repo", metavar="REPO",
         help="The name of the repository")
-    parser.add_argument(
-        "number", metavar="NUMBER", type=int,
-        help="The number of the issue or pull request")
-    parser.add_argument(
+    parent_parser.add_argument(
         "-c", "--comments", metavar="N", type=int, nargs='?', default=0,
         const=None,
         help=textwrap.dedent("""\
             Include the first %(metavar)s comments
             [default: all comments if -c provided]
             """))
-    parser.add_argument(
+    parent_parser.add_argument(
         "-w", "--wrap", metavar="COLS", type=int, nargs='?', const=72,
         help=textwrap.dedent("""\
             Wrap each line of text to %(metavar)s columns
             [default: 72 if -w provided]
             """))
+
+    issue_parser = subparsers.add_parser(
+        "issue", parents=[parent_parser],
+        description="Export one issue in mbox format")
+    pr_parser = subparsers.add_parser(
+        "pr", parents=[parent_parser],
+        description="Export one pull request in mbox format")
+
+    issue_parser.add_argument(
+        "number", metavar="NUMBER", type=int,
+        help="The number of the issue")
+    pr_parser.add_argument(
+        "number", metavar="NUMBER", type=int,
+        help="The number of the pull request")
+
+    issues_parser = subparsers.add_parser(
+        "issues", parents=[parent_parser],
+        description="Export issues from a repository in mbox format")
+    prs_parser = subparsers.add_parser(
+        "prs", parents=[parent_parser],
+        description="Export pull requests from a repository in mbox format")
+
     asyncio.run(Hubmail(parser.parse_args()).main())
