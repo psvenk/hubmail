@@ -102,48 +102,74 @@ class Hubmail:
     async def _get_threads(self, threads_type, user, repo):
         # threads_type is either "issues" or "pullRequests"
         query = threads_type[0].upper() + threads_type[1:]
+        # Get threads from end (reverse order) if negative number of threads
+        # specified
+        if self.threads is not None and self.threads < 0:
+            query += "FromEnd"
+            reverse_order = True
+        else:
+            reverse_order = False
+        num_threads = abs(self.threads) if self.threads is not None else None
         variables = {
             "user": user, "repo": repo,
-            "numThreads": (20 if self.threads is None or self.threads >= 20
-                           else self.threads),
-            "cursor": None
+            "numThreads": (
+                20 if num_threads is None or num_threads >= 20
+                else num_threads
+            ),
+            "cursor": None,
         }
         while True:
             ## IssueConnection! | PullRequestConnection!
             result = ((await self._run_query(query, variables))
-                           ["data"]["repository"][threads_type])
+                      ["data"]["repository"][threads_type])
+            if reverse_order:
+                result["nodes"] = result["nodes"][::-1]
             self.total_threads += len(result["nodes"])
-            if self.threads is None or self.total_threads <= self.threads:
+            if num_threads is None or self.total_threads <= num_threads:
                 yield result["nodes"] or []
             else:
                 # Remove the excess threads
-                yield result["nodes"][:-(self.total_threads - self.threads)]
+                yield result["nodes"][:-(self.total_threads - num_threads)]
                 break
-            variables["cursor"] = result["pageInfo"]["endCursor"]
+            variables["cursor"] = result["pageInfo"]["nextCursor"]
             if not variables["cursor"]:
                 break
 
     async def _get_comments(self, id):
+        # Get threads from end (reverse order) if negative number of comments
+        # specified
+        if self.comments is not None and self.comments < 0:
+            query = "CommentsFromEnd"
+            reverse_order = True
+        else:
+            query = "Comments"
+            reverse_order = False
+        num_comments = (abs(self.comments) if self.comments is not None
+                        else None)
         variables = {
             "id": id,
-            "numComments": (20 if self.comments is None or self.comments >= 20
-                            else self.comments),
-            "cursor": None
+            "numComments": (
+                20 if num_comments is None or num_comments >= 20
+                else num_comments
+            ),
+            "cursor": None,
         }
         total_comments = 0
         while True:
             ## IssueCommentConnection!
-            result = ((await self._run_query("Comments", variables))
-                           ["data"]["node"]["comments"])
+            result = ((await self._run_query(query, variables))
+                      ["data"]["node"]["comments"])
+            if reverse_order:
+                result["nodes"] = result["nodes"][::-1]
             total_comments += len(result["nodes"])
-            if self.comments is None or total_comments <= self.comments:
+            if num_comments is None or total_comments <= num_comments:
                 yield result["nodes"] or []
             else:
                 # Remove the excess comments
-                yield result["nodes"][:-(total_comments - self.comments)]
+                yield result["nodes"][:-(total_comments - num_comments)]
                 break
             # Get new cursor; break if end of comments reached
-            variables["cursor"] = result["pageInfo"]["endCursor"]
+            variables["cursor"] = result["pageInfo"]["nextCursor"]
             if not variables["cursor"]:
                 break
 
@@ -336,8 +362,9 @@ if __name__ == "__main__":
         "-c", "--comments", metavar="N", type=int, nargs='?', default=0,
         const=None,
         help=textwrap.dedent("""\
-            Include the first %(metavar)s comments
-            [default: all comments if -c provided]
+            Include the first %(metavar)s comments is %(metavar)s is positive,
+            otherwise the latest %(metavar)s comments
+            [default: all comments if -c provided, otherwise no comments]
             """))
     parent_parser.add_argument(
         "-w", "--wrap", metavar="COLS", type=int, nargs='?', const=72,
@@ -373,12 +400,14 @@ if __name__ == "__main__":
     issues_parser.add_argument(
         "-t", "--threads", metavar="N", type=int,
         help=textwrap.dedent("""\
-            Include the first %(metavar)s threads [default: all threads]
+            Include the first %(metavar)s threads is %(metavar)s is positive,
+            otherwise the latest %(metavar)s threads [default: all threads]
             """))
     pulls_parser.add_argument(
         "-t", "--threads", metavar="N", type=int,
         help=textwrap.dedent("""\
-            Include the first %(metavar)s threads [default: all threads]
+            Include the first %(metavar)s threads is %(metavar)s is positive,
+            otherwise the latest %(metavar)s threads [default: all threads]
             """))
 
     asyncio.run(Hubmail(parser.parse_args()).main())

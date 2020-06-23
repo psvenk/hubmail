@@ -31,12 +31,12 @@ shell (for running the testing script)
 3. Run `./hubmail -h` for usage information, and `./hubmail SUBCOMMAND -h` for
    usage information for a subcommand (e.g. `issue`, `pull`).
 
-For example, to fetch all issues and pull requests from `user/repo`, wrapped to
-72 characters and with the first 20 comments on each, output to the file
-`repo.mbox`:
+For example, to fetch the oldest 10 issues and the newest 5 pull requests from
+`user/repo`, wrapped to 72 characters and with the first 20 comments on each,
+output to the file `repo.mbox`:
 ```console
-$ ./hubmail issues -c20 -w72 user repo >  repo.mbox
-$ ./hubmail pulls  -c20 -w72 user repo >> repo.mbox
+$ ./hubmail issues -t10 -c20 -w72 user repo >  repo.mbox
+$ ./hubmail pulls  -t-5 -c20 -w72 user repo >> repo.mbox
 ```
 
 [1]: https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line
@@ -62,7 +62,6 @@ directory with the chosen filenames.
 
 ## Roadmap
 
-- Allow fetching the last N issues/pull requests instead of the first N
 - Add support for including thread info in subject line (like GitHub
   notification emails)
 - Add support for changing message IDs to differ from the GitHub notification
@@ -71,6 +70,7 @@ directory with the chosen filenames.
 - Keep track of rate limit and pause if it is reached
 - Include attachments (e.g. images)
 - Keep regexes as constants using `re.compile`
+- Add support for keeping usernames instead of real names (or both?)
 - Multipart email support with HTML part
 
 And possibly:

@@ -6,7 +6,21 @@ $cursor: String) {
         ... issue,
       },
       pageInfo {
-        endCursor,
+        nextCursor: endCursor,
+      },
+    },
+  },
+}
+
+query IssuesFromEnd($user: String!, $repo: String!, $numThreads: Int!,
+$cursor: String) {
+  repository(owner: $user, name: $repo) {
+    issues(last: $numThreads, before: $cursor) {
+      nodes {
+        ... issue,
+      },
+      pageInfo {
+        nextCursor: startCursor,
       },
     },
   },
@@ -20,7 +34,21 @@ $cursor: String) {
         ... pullRequest,
       },
       pageInfo {
-        endCursor,
+        nextCursor: endCursor,
+      },
+    },
+  }
+}
+
+query PullRequestsFromEnd($user: String!, $repo: String!, $numThreads: Int!,
+$cursor: String) {
+  repository(owner: $user, name: $repo) {
+    pullRequests(last: $numThreads, before: $cursor) {
+      nodes {
+        ... pullRequest,
+      },
+      pageInfo {
+        nextCursor: endCursor,
       },
     },
   }
@@ -52,6 +80,21 @@ query Comments($id: ID!, $numComments: Int!, $cursor: String) {
     ... on PullRequest {
       comments(first: $numComments, after: $cursor) {
         ... comments,
+      },
+    },
+  },
+}
+
+query CommentsFromEnd($id: ID!, $numComments: Int!, $cursor: String) {
+  node(id: $id) {
+    ... on Issue {
+      comments(last: $numComments, before: $cursor) {
+        ... commentsFromEnd,
+      },
+    },
+    ... on PullRequest {
+      comments(last: $numComments, before: $cursor) {
+        ... commentsFromEnd,
       },
     },
   },
@@ -90,7 +133,21 @@ fragment comments on IssueCommentConnection {
     createdAt,
   },
   pageInfo {
-    endCursor,
+    nextCursor: endCursor,
+  },
+}
+
+fragment commentsFromEnd on IssueCommentConnection {
+  nodes {
+    databaseId,
+    author {
+      ... actor,
+    },
+    body,
+    createdAt,
+  },
+  pageInfo {
+    nextCursor: startCursor,
   },
 }
 
