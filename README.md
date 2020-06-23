@@ -65,8 +65,6 @@ directory with the chosen filenames.
 - Allow fetching the last N issues/pull requests instead of the first N
 - Add support for including thread info in subject line (like GitHub
   notification emails)
-- Fetch pull request name and description, not just the commits
-- Assign different message IDs to different commits in a pull request
 - Add support for changing message IDs to differ from the GitHub notification
   emails
 - Include non-comment actions; e.g., pull request reviews and merges
