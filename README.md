@@ -71,6 +71,8 @@ directory with the chosen filenames.
   emails
 - Include non-comment actions; e.g., pull request reviews and merges
 - Keep track of rate limit and pause if it is reached
+- Include attachments (e.g. images)
+- Keep regexes as constants using `re.compile`
 - Multipart email support with HTML part
 
 And possibly:
@@ -80,9 +82,7 @@ And possibly:
 
 ## Bugs
 
-- If a commit in a pull request has a subject spanning multiple lines, the
-  message ID is put after the first line
-  + Maybe this can be solved by using `email.message.EmailMessage`
+No known bugs at the moment.
 
 ## License
 

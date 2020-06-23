@@ -5,7 +5,10 @@
 
 import sys
 import os
-import email.utils as eu
+from email.policy import default as default_policy
+from email.message import EmailMessage
+from email.headerregistry import Address
+from email.parser import HeaderParser
 from time import time, gmtime, asctime
 import textwrap
 import itertools
@@ -52,6 +55,17 @@ class Hubmail:
             pass
 
         self.total_threads = 0
+
+        self.policy = default_policy.clone(
+            max_line_length = self.wrap,
+            raise_on_defect = True,
+        )
+        self.patch_policy = default_policy.clone(
+            max_line_length = None,
+            refold_source = "none",
+            raise_on_defect = True,
+        )
+
         try:
             with open(self.QUERY_FILE_NAME, "r") as queryFile:
                 self.query = queryFile.read()
@@ -134,10 +148,7 @@ class Hubmail:
                 break
 
     def _format_email(self, name, address, timestamp, subject, body, heading,
-                     message_id=None, in_reply_to=None, references=None):
-        if references is None and in_reply_to is not None:
-            references = [in_reply_to]
-
+                      message_id, in_reply_to="", references=""):
         body = body.replace("\r\n", "\n")
 
         try:
@@ -155,22 +166,35 @@ class Hubmail:
                         else ""))
                 for line in body.splitlines())
 
-        # Replace "From" at the beginning of a line with ">From";
-        # include any quoting so that this process is reversible.
-        body = re.sub(r"^([> ]*)From", r">\1From", body, flags=re.MULTILINE)
+        # Replace "From" at the beginning of a line with ">From"
+        # (see https://www.jwz.org/doc/content-length.html)
+        body = re.sub(r"^From", r">From", body, flags=re.MULTILINE)
 
-        return (
-            textwrap.dedent(f"""\
-                From nobody@localhost {asctime(gmtime(time()))}
-                From: {eu.formataddr((name, address))}
-                Date: {eu.format_datetime(timestamp)}
-                Subject: {subject}
-                Content-Type: text/plain; charset=UTF-8
-                """)
-            + (f"Message-ID: <{message_id}>\n" if message_id else "")
-            + (f"In-Reply-To: <{in_reply_to}>\n" if in_reply_to else "")
-            + (f"References: <{', '.join(references)}>\n" if references else "")
-            + "\n" + body)
+        msg = EmailMessage(policy=self.policy)
+        msg.set_content(body)
+
+        try:
+            msg["From"] = Address(name, addr_spec=address)
+        except IndexError:
+            msg["From"] = Address(name)
+        msg["Date"] = timestamp
+        msg["Subject"] = subject
+        if message_id:
+            msg["Message-ID"] = message_id
+        if in_reply_to:
+            msg["In-Reply-To"] = in_reply_to
+
+        if references and in_reply_to:
+            msg["References"] = f"{references} {in_reply_to}"
+        elif references:
+            msg["References"] = references
+        elif in_reply_to:
+            msg["References"] = in_reply_to
+
+        # For some reason as_string does not include the unixfrom line
+        # and as_bytes uses the quoted-printable encoding despite purportedly
+        # supporting native Unicode.
+        return msg.as_bytes(policy=self.policy, unixfrom=True).decode()
 
     async def _format_issue(self, user, repo, issue):
         number = issue["number"]
@@ -180,7 +204,7 @@ class Hubmail:
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(issue["createdAt"]),
             issue["title"], issue["body"], f"{user}/{repo}#{number}",
-            f"{user}/{repo}/issues/{number}@github.com")
+            f"<{user}/{repo}/issues/{number}@github.com>")
         if self.comments == 0:
             return result
         return result + "\n\n".join([i async for i in self._format_comments(
@@ -197,13 +221,21 @@ class Hubmail:
         async with self.session.get(f"{pull['url']}.patch") as resp:
             assert resp.status == 200
             thread_info = (user, repo, "pull", str(number))
-            result = re.sub(
-                r"(\nSubject: .*\n)", r"\1"
-                + f"Message-ID: <{'/'.join(thread_info)}@github.com>\n",
-                await resp.text())
+            result = ""
+            for rawtext in re.split(
+                    r"^From ", await resp.text(), flags=re.MULTILINE)[1:]:
+                unixfrom, text = rawtext.split('\n', 1)
+                # Keep headers separate from body so that patch is not mangled
+                # (e.g. if patch contains CRLF, don't convert to LF)
+                headers, body = text.split('\n\n', 1)
+                msg = HeaderParser(policy=self.patch_policy).parsestr(headers)
+                msg["Message-ID"] = f"<{'/'.join(thread_info)}@github.com>"
+                result += (
+                    "From " + unixfrom + '\n'
+                    + msg.as_string(policy=self.policy) + body)
         if self.comments == 0:
             return result
-        return result + "\n\n".join([i async for i in self._format_comments(
+        return result + "\n".join([i async for i in self._format_comments(
             pull["id"], f"Re: {pull['title']}", thread_info)])
 
     async def format_pull(self, user, repo, number):
@@ -235,11 +267,11 @@ class Hubmail:
         ## [IssueComment]!
         async for comments in self._get_comments(id):
             result = ""
-            orig_message_id = f"{'/'.join(thread_info)}@github.com"
+            orig_message_id = f"<{'/'.join(thread_info)}@github.com>"
             for comment in comments:
                 ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
                 author = comment["author"] or self.NULL_ACTOR
-                message_id = f"{'/'.join(thread_info)}/c{comment['databaseId']}@github.com"
+                message_id = f"<{'/'.join(thread_info)}/c{comment['databaseId']}@github.com>"
                 result += "\n\n" + self._format_email(
                     author.get("name") or author.get("login"),
                     author.get("email") or author.get("emailOrNull") or "",
