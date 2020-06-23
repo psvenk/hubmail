@@ -147,7 +147,7 @@ class Hubmail:
             if not variables["cursor"]:
                 break
 
-    def _format_email(self, name, address, timestamp, subject, body, heading,
+    def _format_email(self, name, address, timestamp, subject, body,
                       message_id, in_reply_to="", references=""):
         body = body.replace("\r\n", "\n")
 
@@ -203,7 +203,7 @@ class Hubmail:
         result = self._format_email(
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(issue["createdAt"]),
-            issue["title"], issue["body"], f"{user}/{repo}#{number}",
+            issue["title"], issue["body"],
             f"<{user}/{repo}/issues/{number}@github.com>")
         if self.comments == 0:
             return result
@@ -224,8 +224,7 @@ class Hubmail:
         result = self._format_email(
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(pull["createdAt"]),
-            pull["title"], pull["body"], f"{user}/{repo}#{number}",
-            message_id)
+            pull["title"], pull["body"], message_id)
 
         # Get pull request patches
         async with self.session.get(f"{pull['url']}.patch") as resp:
@@ -278,7 +277,6 @@ class Hubmail:
 
     async def _format_comments(self, id, subject, thread_info):
         user, repo, _, number = thread_info
-        thread_name = f"{user}/{repo}#{number}"
         ## [IssueComment]!
         async for comments in self._get_comments(id):
             result = ""
@@ -291,7 +289,7 @@ class Hubmail:
                     author.get("name") or author.get("login"),
                     author.get("email") or author.get("emailOrNull") or "",
                     isoparse(comment["createdAt"]), subject, comment["body"],
-                    thread_name, message_id, orig_message_id)
+                    message_id, orig_message_id)
             yield result
 
     async def main(self):
