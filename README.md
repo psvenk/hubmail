@@ -62,8 +62,6 @@ directory with the chosen filenames.
 
 ## Roadmap
 
-- Add support for including thread info in subject line (like GitHub
-  notification emails)
 - Add support for changing message IDs to differ from the GitHub notification
   emails
 - Include non-comment actions; e.g., pull request reviews and merges
@@ -72,6 +70,8 @@ directory with the chosen filenames.
 - Keep regexes as constants using `re.compile`
 - Add support for keeping usernames instead of real names (or both?)
 - Multipart email support with HTML part
+- Generate man page (preferably from argparse)
+- More graceful error handling (e.g. when a repository is not found)
 
 And possibly:
 - Add support for edited issues

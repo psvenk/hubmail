@@ -44,6 +44,7 @@ class Hubmail:
         self.repo = arguments.repo
         self.comments = arguments.comments
         self.wrap = arguments.wrap
+        self.extended_subject = arguments.extended_subject
 
         try:
             self.number = arguments.number
@@ -226,15 +227,17 @@ class Hubmail:
         number = issue["number"]
         author = issue["author"] or self.NULL_ACTOR
         assert number and author
+        subject = (f"[{user}/{repo}] {issue['title']} (#{number})"
+                   if self.extended_subject else issue["title"])
         result = self._format_email(
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(issue["createdAt"]),
-            issue["title"], issue["body"],
+            subject, issue["body"],
             f"<{user}/{repo}/issues/{number}@github.com>")
         if self.comments == 0:
             return result
         return result + "\n\n".join([i async for i in self._format_comments(
-            issue["id"], f"Re: {issue['title']}",
+            issue["id"], f"Re: {subject}",
             (user, repo, "issues", str(number)))])
 
     async def format_issue(self, user, repo, number):
@@ -245,12 +248,14 @@ class Hubmail:
         number = pull["number"]
         author = pull["author"] or self.NULL_ACTOR
         assert number and author
+        subject = (f"[{user}/{repo}] {pull['title']} (#{number})"
+                   if self.extended_subject else pull["title"])
         thread_info = (user, repo, "pull", str(number))
         message_id = f"<{'/'.join(thread_info)}@github.com>"
         result = self._format_email(
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(pull["createdAt"]),
-            pull["title"], pull["body"], message_id)
+            subject, pull["body"], message_id)
 
         # Get pull request patches
         async with self.session.get(f"{pull['url']}.patch") as resp:
@@ -265,6 +270,14 @@ class Hubmail:
                 # (e.g. if patch contains CRLF, don't convert to LF)
                 headers, body = text.split('\n\n', 1)
                 msg = HeaderParser(policy=self.patch_policy).parsestr(headers)
+                if self.extended_subject:
+                    msg_subject = msg["Subject"]
+                    del msg["Subject"]
+                    msg["Subject"] = re.sub(
+                        r"^\[PATCH( .*?)?]",
+                        r"[PATCH {}/{}#{}\1]".format(user, repo, number),
+                        msg_subject,
+                        flags=re.MULTILINE)
                 msg["Message-ID"] = (
                     f"<{'/'.join(thread_info)}/{commit_sha}@github.com>")
                 msg["In-Reply-To"] = message_id
@@ -276,7 +289,7 @@ class Hubmail:
         if self.comments == 0:
             return result
         return result + "\n".join([i async for i in self._format_comments(
-            pull["id"], f"Re: {pull['title']}", thread_info)])
+            pull["id"], f"Re: {subject}", thread_info)])
 
     async def format_pull(self, user, repo, number):
         ## PullRequest!
@@ -351,6 +364,7 @@ if __name__ == "__main__":
             """))
     subparsers = parser.add_subparsers(
         title="subcommands", dest="subcommand", required=True)
+
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument(
         "user", metavar="USER",
@@ -372,12 +386,20 @@ if __name__ == "__main__":
             Wrap each line of text to %(metavar)s columns
             [default: 72 if -w provided]
             """))
+    parent_parser.add_argument(
+        "--extended-subject", action="store_true",
+        help=textwrap.dedent("""\
+            Include the repository name and thread number in each email's
+            subject line (like GitHub notification emails)
+            """))
 
     issue_parser = subparsers.add_parser(
         "issue", parents=[parent_parser],
+        usage="%(prog)s [options] USER REPO NUMBER",
         description="Export one issue in mbox format")
     pull_parser = subparsers.add_parser(
         "pull", parents=[parent_parser],
+        usage="%(prog)s [options] USER REPO NUMBER",
         description="Export one pull request in mbox format")
 
     issue_parser.add_argument(
@@ -392,9 +414,11 @@ if __name__ == "__main__":
 
     issues_parser = subparsers.add_parser(
         "issues", parents=[repo_parent_parser],
+        usage="%(prog)s [options] USER REPO",
         description="Export issues from a repository in mbox format")
     pulls_parser = subparsers.add_parser(
         "pulls", parents=[repo_parent_parser],
+        usage="%(prog)s [options] USER REPO",
         description="Export pull requests from a repository in mbox format")
 
     issues_parser.add_argument(
