@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """hubmail: a tool to export GitHub issues and pull requests as email messages
 """
 # SPDX-License-Identifier: LGPL-2.1-or-later
@@ -13,16 +12,16 @@ from time import time, gmtime, asctime
 import textwrap
 import itertools
 import re
-import argparse
-import asyncio
 
 import aiohttp
 from dateutil.parser import isoparse
 
-try:
-    from dotenv import load_dotenv
-except ModuleNotFoundError:
-    pass
+_QUERY_FILE_NAME = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)), "data", "queries.graphql"
+)
+
+with open(_QUERY_FILE_NAME, "r") as queryFile:
+    _QUERY = queryFile.read()
 
 def fatal(*args, **kwargs):
     print(*args, **kwargs, file=sys.stderr)
@@ -36,7 +35,6 @@ class Hubmail:
         "email": "",
         "emailOrNull": ""
     }
-    QUERY_FILE_NAME = "queries.graphql"
 
     def __init__(self, arguments):
         self.type = arguments.subcommand
@@ -67,12 +65,6 @@ class Hubmail:
             raise_on_defect = True,
         )
 
-        try:
-            with open(self.QUERY_FILE_NAME, "r") as queryFile:
-                self.query = queryFile.read()
-        except OSError as e:
-            fatal(f"Could not open {self.QUERY_FILE_NAME} for reading")
-
     async def _run_query(self, opname, variables):
         if not self.session:
             fatal("No session initialized")
@@ -80,7 +72,7 @@ class Hubmail:
         async with self.session.post(
             "https://api.github.com/graphql",
             json={
-                "query": self.query,
+                "query": _QUERY,
                 "variables": variables,
                 "operationName": opname
             },
@@ -332,10 +324,6 @@ class Hubmail:
             yield result
 
     async def main(self):
-        try:
-            load_dotenv()
-        except NameError:
-            pass
         self.token = os.getenv("HUBMAIL_TOKEN")
         if not self.token:
             fatal("No API token found. Have you set the HUBMAIL_TOKEN " +
@@ -354,84 +342,3 @@ class Hubmail:
                 print(await self.format_pulls(self.user, self.repo))
             else:
                 fatal(f"Subcommand {self.type} not yet implemented")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description=textwrap.dedent(f"""\
-            Export GitHub issues and pull requests as email messages
-            in mbox format (RFC 4155).
-            """))
-    subparsers = parser.add_subparsers(
-        title="subcommands", dest="subcommand", required=True)
-
-    parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument(
-        "user", metavar="USER",
-        help="The username of the owner of the repository")
-    parent_parser.add_argument(
-        "repo", metavar="REPO",
-        help="The name of the repository")
-    parent_parser.add_argument(
-        "-c", "--comments", metavar="N", type=int, nargs='?', default=0,
-        const=None,
-        help=textwrap.dedent("""\
-            Include the first %(metavar)s comments is %(metavar)s is positive,
-            otherwise the latest %(metavar)s comments
-            [default: all comments if -c provided, otherwise no comments]
-            """))
-    parent_parser.add_argument(
-        "-w", "--wrap", metavar="COLS", type=int, nargs='?', const=72,
-        help=textwrap.dedent("""\
-            Wrap each line of text to %(metavar)s columns
-            [default: 72 if -w provided]
-            """))
-    parent_parser.add_argument(
-        "--extended-subject", action="store_true",
-        help=textwrap.dedent("""\
-            Include the repository name and thread number in each email's
-            subject line (like GitHub notification emails)
-            """))
-
-    issue_parser = subparsers.add_parser(
-        "issue", parents=[parent_parser],
-        usage="%(prog)s [options] USER REPO NUMBER",
-        description="Export one issue in mbox format")
-    pull_parser = subparsers.add_parser(
-        "pull", parents=[parent_parser],
-        usage="%(prog)s [options] USER REPO NUMBER",
-        description="Export one pull request in mbox format")
-
-    issue_parser.add_argument(
-        "number", metavar="NUMBER", type=int,
-        help="The number of the issue")
-    pull_parser.add_argument(
-        "number", metavar="NUMBER", type=int,
-        help="The number of the pull request")
-
-    repo_parent_parser = argparse.ArgumentParser(
-        add_help=False, parents=[parent_parser])
-
-    issues_parser = subparsers.add_parser(
-        "issues", parents=[repo_parent_parser],
-        usage="%(prog)s [options] USER REPO",
-        description="Export issues from a repository in mbox format")
-    pulls_parser = subparsers.add_parser(
-        "pulls", parents=[repo_parent_parser],
-        usage="%(prog)s [options] USER REPO",
-        description="Export pull requests from a repository in mbox format")
-
-    issues_parser.add_argument(
-        "-t", "--threads", metavar="N", type=int,
-        help=textwrap.dedent("""\
-            Include the first %(metavar)s threads is %(metavar)s is positive,
-            otherwise the latest %(metavar)s threads [default: all threads]
-            """))
-    pulls_parser.add_argument(
-        "-t", "--threads", metavar="N", type=int,
-        help=textwrap.dedent("""\
-            Include the first %(metavar)s threads is %(metavar)s is positive,
-            otherwise the latest %(metavar)s threads [default: all threads]
-            """))
-
-    asyncio.run(Hubmail(parser.parse_args()).main())

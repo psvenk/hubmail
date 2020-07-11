@@ -9,7 +9,7 @@ IFS='
 for cmd in $cmds
 do
 	IFS=' '
-	./hubmail ${cmd%:*} >"${dir}/${cmd##*:}"
+	"$hubmail" ${cmd%:*} >"${dir}/${cmd##*:}"
 done
 
 if [ -n "$all" ]

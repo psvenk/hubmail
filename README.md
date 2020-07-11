@@ -7,8 +7,6 @@ A tool to export GitHub issues and pull requests as email messages.
 
 The only similar tool of which I am aware is [export-pull-requests][0] by Skye
 Shaw, which exports only metadata and uses CSV format instead of email format.
-Please let me know if you have found another tool with the same aim as hubmail;
-I would be eager to check it out!
 
 [0]: https://github.com/sshaw/export-pull-requests
 
@@ -16,31 +14,36 @@ I would be eager to check it out!
 
 Python 3.8, [aiohttp][aiohttp], [dateutil][dateutil]
 
-Optional: [python-dotenv][python-dotenv] (for storing the API key in a `.env`
-file), POSIX shell (for running the testing script)
+Optional: [argparse-manpage][argparse-manpage] (for building a man page), POSIX
+shell (for running the testing script)
 
 `hubmail` may also work on Python 3.7, but I have not tested it there.
 
+If you use pip, you can run `pip install -r requirements.txt` to install all
+required dependencies.
+
 [aiohttp]: https://pypi.org/project/aiohttp/
 [dateutil]: https://pypi.org/project/python-dateutil/
-[python-dotenv]: https://pypi.org/project/python-dotenv/
+[argparse-manpage]: https://pypi.org/project/argparse-manpage/
 
 ## Usage
 
 1. Create a peronal access token on GitHub's website following [these
    instructions][1].
-2. Set the environment variable `HUBMAIL_TOKEN` to your token. If you have the
-   `python-dotenv` library installed, you can alternatively create a file
-   `.env` with the line `HUBMAIL_TOKEN=your_token_here`.
-3. Run `./hubmail -h` for usage information, and `./hubmail SUBCOMMAND -h` for
-   usage information for a subcommand (e.g. `issue`, `pull`).
+2. Set the environment variable `HUBMAIL_TOKEN` to your token.
+3. Run `,/run_hubmail -h` for usage information, and
+   `./run_hubmail SUBCOMMAND -h` for usage information for a subcommand (e.g.
+   `issue`, `pull`).
+
+To install `hubmail` to your `$PATH`, run `python3 setup.py install`. This will
+also install documentation if you have `argparse-manpage` installed.
 
 For example, to fetch the oldest 10 issues and the newest 5 pull requests from
 `user/repo`, wrapped to 72 characters and with the first 20 comments on each,
 output to the file `repo.mbox`:
 ```console
-$ ./hubmail issues -t10 -c20 -w72 user repo >  repo.mbox
-$ ./hubmail pulls  -t-5 -c20 -w72 user repo >> repo.mbox
+$ hubmail issues -t10 -c20 -w72 user repo >  repo.mbox
+$ hubmail pulls  -t-5 -c20 -w72 user repo >> repo.mbox
 ```
 
 [1]: https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line
@@ -50,12 +53,17 @@ $ ./hubmail pulls  -t-5 -c20 -w72 user repo >> repo.mbox
 Create a file with contents like the following and put it at `test/config`:
 ```sh
 #!/bin/sh
+
+# Location of hubmail executable
+# (hubmail if you have installed it in your $PATH; ./run_hubmail otherwise)
+hubmail=./run_hubmail
+
 dir=messages
+
 # Send all messages to this file (leave blank to disable)
 all=all.mbox
 
-# Format:
-# ARGUMENTS:FILENAME
+# Format of each line: ARGUMENTS:FILENAME
 cmds="
 issue -c -w --  myuser myrepo 1:file1.mbox
 pull  -c20 -w72 myuser myrepo 2:file1.mbox
@@ -74,7 +82,6 @@ directory with the chosen filenames.
 - Keep regexes as constants using `re.compile`
 - Add support for keeping usernames instead of real names (or both?)
 - Multipart email support with HTML part
-- Generate man page (preferably from argparse)
 - More graceful error handling (e.g. when a repository is not found)
 
 And possibly:
