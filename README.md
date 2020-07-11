@@ -14,19 +14,23 @@ I would be eager to check it out!
 
 ## Dependencies
 
-Python 3.8, aiohttp, dateutil
+Python 3.8, [aiohttp][aiohttp], [dateutil][dateutil]
 
-Optional: dotenv (for storing the API key in a `.env` file), POSIX-compliant
-shell (for running the testing script)
+Optional: [python-dotenv][python-dotenv] (for storing the API key in a `.env`
+file), POSIX shell (for running the testing script)
 
 `hubmail` may also work on Python 3.7, but I have not tested it there.
+
+[aiohttp]: https://pypi.org/project/aiohttp/
+[dateutil]: https://pypi.org/project/python-dateutil/
+[python-dotenv]: https://pypi.org/project/python-dotenv/
 
 ## Usage
 
 1. Create a peronal access token on GitHub's website following [these
    instructions][1].
 2. Set the environment variable `HUBMAIL_TOKEN` to your token. If you have the
-   Python `dotenv` library installed, you can alternatively create a file
+   `python-dotenv` library installed, you can alternatively create a file
    `.env` with the line `HUBMAIL_TOKEN=your_token_here`.
 3. Run `./hubmail -h` for usage information, and `./hubmail SUBCOMMAND -h` for
    usage information for a subcommand (e.g. `issue`, `pull`).
