@@ -91,7 +91,9 @@ And possibly:
 
 ## Bugs
 
-No known bugs at the moment.
+`asyncio` throws exceptions on Windows about cancelling overlapping futures and
+the event loop being closed, but hubmail works fine otherwise on Windows (the
+exceptions can be ignored by redirecting stderr)
 
 ## License
 
