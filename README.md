@@ -31,12 +31,13 @@ required dependencies.
 1. Create a peronal access token on GitHub's website following [these
    instructions][1].
 2. Set the environment variable `HUBMAIL_TOKEN` to your token.
-3. Run `,/run_hubmail -h` for usage information, and
+3. Run `./run_hubmail -h` for usage information, and
    `./run_hubmail SUBCOMMAND -h` for usage information for a subcommand (e.g.
    `issue`, `pull`).
 
 To install `hubmail` to your `$PATH`, run `python3 setup.py install`. This will
-also install documentation if you have `argparse-manpage` installed.
+also install man page documentation if you have `argparse-manpage` installed
+(run `man 1 hubmail` or `man -l man/hubmail.1` to view it).
 
 For example, to fetch the oldest 10 issues and the newest 5 pull requests from
 `user/repo`, wrapped to 72 characters and with the first 20 comments on each,
@@ -71,6 +72,20 @@ pull  -c20 -w72 myuser myrepo 2:file1.mbox
 ```
 Then run `./test/test` to run `hubmail` and output files to the chosen
 directory with the chosen filenames.
+
+## Features
+
+- Outputs in the mbox format as specified in
+  [RFC 4155](https://tools.ietf.org/html/rfc4155)
+- Can fetch one issue or pull request (by number), or many issues or pull
+  requests in a repository, optionally with comments with support for forward
+  and reverse pagination
+- Pull requests are exported as both patches and discussions
+- The Message-ID, In-Reply-To, and References headers are used to support
+  conversation threading
+- Optional text wrapping with quote recognition
+- Supports comments authored by users, organizations, and bots
+- Supports formatting subject line like GitHub notification emails
 
 ## Roadmap
 
