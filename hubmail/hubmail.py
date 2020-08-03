@@ -255,12 +255,12 @@ class Hubmail:
             for rawtext in re.split(
                     r"^From ", await resp.text(), flags=re.MULTILINE)[1:]:
 
-                unixfrom, text = rawtext.split('\n', 1)
-                commit_sha = unixfrom.split(' ', 1)[0]
+                unixfrom, text = rawtext.split("\n", 1)
+                commit_sha = unixfrom.split(" ", 1)[0]
 
                 # Keep headers separate from body so that patch is not mangled
                 # (e.g. if patch contains CRLF, don't convert to LF)
-                headers, body = text.split('\n\n', 1)
+                headers, body = text.split("\n\n", 1)
                 msg = HeaderParser(policy=self.patch_policy).parsestr(headers)
                 if self.extended_subject:
                     msg_subject = msg["Subject"]
@@ -275,7 +275,7 @@ class Hubmail:
                 msg["In-Reply-To"] = message_id
                 msg["References"] = message_id
                 result += (
-                    '\n' + "From " + unixfrom + '\n'
+                    "\n" + "From " + unixfrom + "\n"
                     + msg.as_string(policy=self.policy) + body)
 
         if self.comments == 0:

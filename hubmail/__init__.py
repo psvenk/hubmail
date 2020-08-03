@@ -23,7 +23,7 @@ def get_parser():
         "repo", metavar="REPO",
         help="The name of the repository")
     parent_parser.add_argument(
-        "-c", "--comments", metavar="N", type=int, nargs='?', default=0,
+        "-c", "--comments", metavar="N", type=int, nargs="?", default=0,
         const=None,
         help=textwrap.dedent("""\
             Include the first %(metavar)s comments is %(metavar)s is positive,
@@ -31,7 +31,7 @@ def get_parser():
             [default: all comments if -c provided, otherwise no comments]
             """))
     parent_parser.add_argument(
-        "-w", "--wrap", metavar="COLS", type=int, nargs='?', const=72,
+        "-w", "--wrap", metavar="COLS", type=int, nargs="?", const=72,
         help=textwrap.dedent("""\
             Wrap each line of text to %(metavar)s columns
             [default: 72 if -w provided]
