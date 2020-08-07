@@ -89,6 +89,7 @@ directory with the chosen filenames.
 - Supports comments authored by users, organizations, and bots
 - Supports formatting subject line like GitHub notification emails
 - Linked images are downloaded and added as attachments
+- Supports compiling multipart emails with Markdown rendered to HTML
 
 ## Roadmap
 
@@ -98,7 +99,6 @@ directory with the chosen filenames.
 - Keep track of rate limit and pause if it is reached
 - Keep regexes as constants using `re.compile`
 - Add support for keeping usernames instead of real names (or both?)
-- Multipart email support with HTML part
 - More graceful error handling (e.g. when a repository is not found)
 
 And possibly:

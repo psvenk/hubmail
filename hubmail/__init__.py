@@ -42,6 +42,12 @@ def get_parser():
             Include the repository name and thread number in each email's
             subject line (like GitHub notification emails)
             """))
+    parent_parser.add_argument(
+        "--html", action="store_true",
+        help=textwrap.dedent("""\
+            Generate multipart emails with a HTML part (rendered Markdown
+            from GitHub)
+            """))
 
     issue_parser = subparsers.add_parser(
         "issue", parents=[parent_parser],

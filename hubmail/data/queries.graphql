@@ -1,5 +1,5 @@
 query Issues($user: String!, $repo: String!, $numThreads: Int!,
-$cursor: String) {
+$cursor: String, $html: Boolean = false) {
   repository(owner: $user, name: $repo) {
     issues(first: $numThreads, after: $cursor) {
       nodes {
@@ -13,7 +13,7 @@ $cursor: String) {
 }
 
 query IssuesFromEnd($user: String!, $repo: String!, $numThreads: Int!,
-$cursor: String) {
+$cursor: String, $html: Boolean = false) {
   repository(owner: $user, name: $repo) {
     issues(last: $numThreads, before: $cursor) {
       nodes {
@@ -27,7 +27,7 @@ $cursor: String) {
 }
 
 query PullRequests($user: String!, $repo: String!, $numThreads: Int!,
-$cursor: String) {
+$cursor: String, $html: Boolean = false) {
   repository(owner: $user, name: $repo) {
     pullRequests(first: $numThreads, after: $cursor) {
       nodes {
@@ -41,7 +41,7 @@ $cursor: String) {
 }
 
 query PullRequestsFromEnd($user: String!, $repo: String!, $numThreads: Int!,
-$cursor: String) {
+$cursor: String, $html: Boolean = false) {
   repository(owner: $user, name: $repo) {
     pullRequests(last: $numThreads, before: $cursor) {
       nodes {
@@ -54,7 +54,8 @@ $cursor: String) {
   }
 }
 
-query Issue($user: String!, $repo: String!, $number: Int!) {
+query Issue($user: String!, $repo: String!, $number: Int!,
+$html: Boolean = false) {
   repository(owner: $user, name: $repo) {
     issue(number:$number) {
       ... issue,
@@ -62,7 +63,8 @@ query Issue($user: String!, $repo: String!, $number: Int!) {
   },
 }
 
-query PullRequest($user: String!, $repo: String!, $number: Int!) {
+query PullRequest($user: String!, $repo: String!, $number: Int!,
+$html: Boolean = false) {
   repository(owner: $user, name: $repo) {
     pullRequest(number: $number) {
       ... pullRequest,
@@ -70,7 +72,8 @@ query PullRequest($user: String!, $repo: String!, $number: Int!) {
   },
 }
 
-query Comments($id: ID!, $numComments: Int!, $cursor: String) {
+query Comments($id: ID!, $numComments: Int!, $cursor: String,
+$html: Boolean = false) {
   node(id: $id) {
     ... on Issue {
       comments(first: $numComments, after: $cursor) {
@@ -85,7 +88,8 @@ query Comments($id: ID!, $numComments: Int!, $cursor: String) {
   },
 }
 
-query CommentsFromEnd($id: ID!, $numComments: Int!, $cursor: String) {
+query CommentsFromEnd($id: ID!, $numComments: Int!, $cursor: String,
+$html: Boolean = false) {
   node(id: $id) {
     ... on Issue {
       comments(last: $numComments, before: $cursor) {
@@ -108,6 +112,7 @@ fragment issue on Issue {
     ... actor,
   },
   body,
+  bodyHTML @include(if: $html),
   createdAt,
 }
 
@@ -120,6 +125,7 @@ fragment pullRequest on PullRequest {
     ... actor,
   },
   body,
+  bodyHTML @include(if: $html),
   createdAt,
 }
 
@@ -130,6 +136,7 @@ fragment comments on IssueCommentConnection {
       ... actor,
     },
     body,
+    bodyHTML @include(if: $html),
     createdAt,
   },
   pageInfo {
@@ -144,6 +151,7 @@ fragment commentsFromEnd on IssueCommentConnection {
       ... actor,
     },
     body,
+    bodyHTML @include(if: $html),
     createdAt,
   },
   pageInfo {

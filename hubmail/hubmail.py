@@ -49,6 +49,7 @@ class Hubmail:
         self.comments = arguments.comments
         self.wrap = arguments.wrap
         self.extended_subject = arguments.extended_subject
+        self.html = arguments.html
 
         try:
             self.number = arguments.number
@@ -90,7 +91,12 @@ class Hubmail:
     async def _get_thread(self, thread_type, user, repo, number):
         # thread_type is either "issue" or "pullRequest"
         query = thread_type[0].upper() + thread_type[1:]
-        variables = {"user": user, "repo": repo, "number": number}
+        variables = {
+            "user": user,
+            "repo": repo,
+            "number": number,
+            "html": self.html,
+        }
         result = ((await self._run_query(query, variables))
                   ["data"]["repository"][thread_type])
         assert result is not None
@@ -114,6 +120,7 @@ class Hubmail:
                 else num_threads
             ),
             "cursor": None,
+            "html": self.html,
         }
         while True:
             ## IssueConnection! | PullRequestConnection!
@@ -150,6 +157,7 @@ class Hubmail:
                 else num_comments
             ),
             "cursor": None,
+            "html": self.html,
         }
         total_comments = 0
         while True:
@@ -171,7 +179,7 @@ class Hubmail:
                 break
 
     async def _format_email(self, name, address, timestamp, subject, body,
-                      message_id, in_reply_to="", references=""):
+                      message_id, *, in_reply_to="", references="", html=None):
         body = body.replace("\r\n", "\n")
 
         try:
@@ -195,6 +203,9 @@ class Hubmail:
 
         msg = EmailMessage(policy=self.policy)
         msg.set_content(body)
+
+        if html:
+            msg.add_alternative(html, subtype="html")
 
         # Identify image URLs and add the images as attachments
         try:
@@ -240,11 +251,12 @@ class Hubmail:
         assert number and author
         subject = (f"[{user}/{repo}] {issue['title']} (#{number})"
                    if self.extended_subject else issue["title"])
+        html = issue["bodyHTML"] if self.html else None
         result = await self._format_email(
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(issue["createdAt"]),
             subject, issue["body"],
-            f"<{user}/{repo}/issues/{number}@github.com>")
+            f"<{user}/{repo}/issues/{number}@github.com>", html=html)
         if self.comments == 0:
             return result
         return result + "\n\n".join([i async for i in self._format_comments(
@@ -263,10 +275,11 @@ class Hubmail:
                    if self.extended_subject else pull["title"])
         thread_info = (user, repo, "pull", str(number))
         message_id = f"<{'/'.join(thread_info)}@github.com>"
+        html = pull["bodyHTML"] if self.html else None
         result = await self._format_email(
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(pull["createdAt"]),
-            subject, pull["body"], message_id)
+            subject, pull["body"], message_id, html=html)
 
         # Get pull request patches
         async with self.session.get(f"{pull['url']}.patch") as resp:
@@ -335,11 +348,12 @@ class Hubmail:
                 ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
                 author = comment["author"] or self.NULL_ACTOR
                 message_id = f"<{'/'.join(thread_info)}/c{comment['databaseId']}@github.com>"
+                html = comment["bodyHTML"] if self.html else None
                 result += "\n\n" + await self._format_email(
                     author.get("name") or author.get("login"),
                     author.get("email") or author.get("emailOrNull") or "",
                     isoparse(comment["createdAt"]), subject, comment["body"],
-                    message_id, orig_message_id)
+                    message_id, in_reply_to=orig_message_id, html=html)
             yield result
 
     async def main(self):
