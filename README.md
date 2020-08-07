@@ -14,8 +14,9 @@ Shaw, which exports only metadata and uses CSV format instead of email format.
 
 Python 3.8, [aiohttp][aiohttp], [dateutil][dateutil]
 
-Optional: [argparse-manpage][argparse-manpage] (for building a man page), POSIX
-shell (for running the testing script)
+Optional: [mistletoe][mistletoe] (for attaching linked images),
+[argparse-manpage][argparse-manpage] (for building a man page), POSIX shell
+(for running the testing script)
 
 `hubmail` may also work on Python 3.7, but I have not tested it there.
 
@@ -24,6 +25,7 @@ required dependencies.
 
 [aiohttp]: https://pypi.org/project/aiohttp/
 [dateutil]: https://pypi.org/project/python-dateutil/
+[mistletoe]: https://pypi.org/project/mistletoe/
 [argparse-manpage]: https://pypi.org/project/argparse-manpage/
 
 ## Usage
@@ -86,6 +88,7 @@ directory with the chosen filenames.
 - Optional text wrapping with quote recognition
 - Supports comments authored by users, organizations, and bots
 - Supports formatting subject line like GitHub notification emails
+- Linked images are downloaded and added as attachments
 
 ## Roadmap
 
@@ -93,7 +96,6 @@ directory with the chosen filenames.
   emails
 - Include non-comment actions; e.g., pull request reviews and merges
 - Keep track of rate limit and pause if it is reached
-- Include attachments (e.g. images)
 - Keep regexes as constants using `re.compile`
 - Add support for keeping usernames instead of real names (or both?)
 - Multipart email support with HTML part

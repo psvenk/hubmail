@@ -9,9 +9,15 @@ from email.message import EmailMessage
 from email.headerregistry import Address
 from email.parser import HeaderParser
 from time import time, gmtime, asctime
+from urllib.parse import urlparse
 import textwrap
-import itertools
 import re
+import mimetypes
+import posixpath
+
+try:
+    from hubmail.mdparse import get_image_urls
+except: pass
 
 import aiohttp
 from dateutil.parser import isoparse
@@ -66,9 +72,7 @@ class Hubmail:
         )
 
     async def _run_query(self, opname, variables):
-        if not self.session:
-            fatal("No session initialized")
-
+        assert self.session, "No session initialized"
         async with self.session.post(
             "https://api.github.com/graphql",
             json={
@@ -166,7 +170,7 @@ class Hubmail:
             if not variables["cursor"]:
                 break
 
-    def _format_email(self, name, address, timestamp, subject, body,
+    async def _format_email(self, name, address, timestamp, subject, body,
                       message_id, in_reply_to="", references=""):
         body = body.replace("\r\n", "\n")
 
@@ -191,6 +195,21 @@ class Hubmail:
 
         msg = EmailMessage(policy=self.policy)
         msg.set_content(body)
+
+        # Identify image URLs and add the images as attachments
+        try:
+            for url in get_image_urls(body):
+                async with self.session.get(url) as resp:
+                    assert resp.status == 200
+                    img_data = await resp.read()
+                    maintype, subtype = mimetypes.guess_type(url)[0].split("/")
+                    filename = posixpath.basename(urlparse(url).path)
+                    msg.add_attachment(
+                        img_data, maintype=maintype, subtype=subtype,
+                        filename=filename
+                    )
+        except:
+            pass
 
         try:
             msg["From"] = Address(name, addr_spec=address)
@@ -221,7 +240,7 @@ class Hubmail:
         assert number and author
         subject = (f"[{user}/{repo}] {issue['title']} (#{number})"
                    if self.extended_subject else issue["title"])
-        result = self._format_email(
+        result = await self._format_email(
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(issue["createdAt"]),
             subject, issue["body"],
@@ -244,7 +263,7 @@ class Hubmail:
                    if self.extended_subject else pull["title"])
         thread_info = (user, repo, "pull", str(number))
         message_id = f"<{'/'.join(thread_info)}@github.com>"
-        result = self._format_email(
+        result = await self._format_email(
             author.get("name") or author.get("login"), author.get("email") or
             author.get("emailOrNull") or "", isoparse(pull["createdAt"]),
             subject, pull["body"], message_id)
@@ -316,7 +335,7 @@ class Hubmail:
                 ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
                 author = comment["author"] or self.NULL_ACTOR
                 message_id = f"<{'/'.join(thread_info)}/c{comment['databaseId']}@github.com>"
-                result += "\n\n" + self._format_email(
+                result += "\n\n" + await self._format_email(
                     author.get("name") or author.get("login"),
                     author.get("email") or author.get("emailOrNull") or "",
                     isoparse(comment["createdAt"]), subject, comment["body"],
