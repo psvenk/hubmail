@@ -21,7 +21,7 @@ Optional: [mistletoe][mistletoe] (for attaching linked images),
 `hubmail` may also work on Python 3.7, but I have not tested it there.
 
 If you use pip, you can run `pip install -r requirements.txt` to install all
-required dependencies.
+required and optional dependencies.
 
 [aiohttp]: https://pypi.org/project/aiohttp/
 [dateutil]: https://pypi.org/project/python-dateutil/
@@ -31,7 +31,8 @@ required dependencies.
 ## Usage
 
 1. Create a peronal access token on GitHub's website following [these
-   instructions][1].
+   instructions][1] with the scopes `public_repo`, `read:user`, and
+   `user:email`.
 2. Set the environment variable `HUBMAIL_TOKEN` to your token.
 3. Run `./run_hubmail -h` for usage information, and
    `./run_hubmail SUBCOMMAND -h` for usage information for a subcommand (e.g.
