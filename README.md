@@ -34,9 +34,9 @@ required and optional dependencies.
    instructions][1] with the scopes `public_repo`, `read:user`, and
    `user:email`.
 2. Set the environment variable `HUBMAIL_TOKEN` to your token.
-3. Run `./run_hubmail -h` for usage information, and
-   `./run_hubmail SUBCOMMAND -h` for usage information for a subcommand (e.g.
-   `issue`, `pull`).
+3. Run `python3 -m hubmail -h` for usage information, and `python3 -m hubmail
+   SUBCOMMAND -h` for usage information for a subcommand (e.g. `issue`,
+   `pull`).
 
 To install `hubmail` to your `$PATH`, run `python3 setup.py install`. This will
 also install man page documentation if you have `argparse-manpage` installed
@@ -58,9 +58,9 @@ Create a file with contents like the following and put it at `test/config`:
 ```sh
 #!/bin/sh
 
-# Location of hubmail executable
-# (hubmail if you have installed it in your $PATH; ./run_hubmail otherwise)
-hubmail=./run_hubmail
+# Command line to run hubmail (`hubmail` should work if you have installed it
+# into your $PATH)
+hubmail='python3 -m hubmail'
 
 dir=messages
 

@@ -24,7 +24,7 @@ params = {
         "": ["data/*"],
     },
     "entry_points": {
-        "console_scripts": ["hubmail = hubmail:main"],
+        "console_scripts": ["hubmail = hubmail.__main__:main"],
     },
     "python_requires": ">= 3.7"
 }
