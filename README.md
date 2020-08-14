@@ -98,7 +98,6 @@ directory with the chosen filenames.
   emails
 - Include non-comment actions; e.g., pull request reviews and merges
 - Keep track of rate limit and pause if it is reached
-- Keep regexes as constants using `re.compile`
 - Add support for keeping usernames instead of real names (or both?)
 - More graceful error handling (e.g. when a repository is not found)
 

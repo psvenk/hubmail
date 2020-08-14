@@ -33,15 +33,17 @@ def fatal(*args, **kwargs):
     print(*args, **kwargs, file=sys.stderr)
     sys.exit(1)
 
+NULL_ACTOR = {
+    "login": "ghost",
+    "name": "ghost",
+    "email": "",
+    "emailOrNull": ""
+}
+REGEX_FROM = re.compile(r"^From", flags=re.MULTILINE)
+REGEX_FROM_SPACE = re.compile(r"^From ", flags=re.MULTILINE)
+REGEX_PATCH = re.compile(r"^\[PATCH( .*?)?]", flags=re.MULTILINE)
 
 class Hubmail:
-    NULL_ACTOR = {
-        "login": "ghost",
-        "name": "ghost",
-        "email": "",
-        "emailOrNull": ""
-    }
-
     def __init__(self, arguments):
         self.type = arguments.subcommand
         self.user = arguments.user
@@ -199,7 +201,7 @@ class Hubmail:
 
         # Replace "From" at the beginning of a line with ">From"
         # (see https://www.jwz.org/doc/content-length.html)
-        body = re.sub(r"^From", r">From", body, flags=re.MULTILINE)
+        body = REGEX_FROM.sub(r">From", body)
 
         msg = EmailMessage(policy=self.policy)
         msg.set_content(body)
@@ -247,7 +249,7 @@ class Hubmail:
 
     async def _format_issue(self, user, repo, issue):
         number = issue["number"]
-        author = issue["author"] or self.NULL_ACTOR
+        author = issue["author"] or NULL_ACTOR
         assert number and author
         subject = (f"[{user}/{repo}] {issue['title']} (#{number})"
                    if self.extended_subject else issue["title"])
@@ -269,7 +271,7 @@ class Hubmail:
 
     async def _format_pull(self, user, repo, pull):
         number = pull["number"]
-        author = pull["author"] or self.NULL_ACTOR
+        author = pull["author"] or NULL_ACTOR
         assert number and author
         subject = (f"[{user}/{repo}] {pull['title']} (#{number})"
                    if self.extended_subject else pull["title"])
@@ -284,8 +286,7 @@ class Hubmail:
         # Get pull request patches
         async with self.session.get(f"{pull['url']}.patch") as resp:
             assert resp.status == 200
-            for rawtext in re.split(
-                    r"^From ", await resp.text(), flags=re.MULTILINE)[1:]:
+            for rawtext in REGEX_FROM_SPACE.split(await resp.text())[1:]:
 
                 unixfrom, text = rawtext.split("\n", 1)
                 commit_sha = unixfrom.split(" ", 1)[0]
@@ -297,11 +298,9 @@ class Hubmail:
                 if self.extended_subject:
                     msg_subject = msg["Subject"]
                     del msg["Subject"]
-                    msg["Subject"] = re.sub(
-                        r"^\[PATCH( .*?)?]",
+                    msg["Subject"] = REGEX_PATCH.sub(
                         r"[PATCH {}/{}#{}\1]".format(user, repo, number),
-                        msg_subject,
-                        flags=re.MULTILINE)
+                        msg_subject)
                 msg["Message-ID"] = (
                     f"<{'/'.join(thread_info)}/{commit_sha}@github.com>")
                 msg["In-Reply-To"] = message_id
@@ -346,7 +345,7 @@ class Hubmail:
             orig_message_id = f"<{'/'.join(thread_info)}@github.com>"
             for comment in comments:
                 ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
-                author = comment["author"] or self.NULL_ACTOR
+                author = comment["author"] or NULL_ACTOR
                 message_id = f"<{'/'.join(thread_info)}/c{comment['databaseId']}@github.com>"
                 html = comment["bodyHTML"] if self.html else None
                 result += "\n\n" + await self._format_email(
