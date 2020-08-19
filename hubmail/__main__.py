@@ -1,12 +1,12 @@
 from hubmail import Hubmail
 
-import argparse
+from argparse import ArgumentParser
 import textwrap
 import asyncio
 import os
 
-def get_parser():
-    parser = argparse.ArgumentParser(
+def get_parser() -> ArgumentParser:
+    parser = ArgumentParser(
         prog="hubmail",
         description=textwrap.dedent(f"""\
             Export GitHub issues and pull requests as email messages
@@ -15,7 +15,7 @@ def get_parser():
     subparsers = parser.add_subparsers(
         title="subcommands", dest="subcommand", required=True)
 
-    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser = ArgumentParser(add_help=False)
     parent_parser.add_argument(
         "user", metavar="USER",
         help="The username of the owner of the repository")
@@ -65,7 +65,7 @@ def get_parser():
         "number", metavar="NUMBER", type=int,
         help="The number of the pull request")
 
-    repo_parent_parser = argparse.ArgumentParser(
+    repo_parent_parser = ArgumentParser(
         add_help=False, parents=[parent_parser])
 
     issues_parser = subparsers.add_parser(
@@ -92,7 +92,7 @@ def get_parser():
 
     return parser
 
-def main():
+def main() -> None:
     asyncio.run(Hubmail(get_parser().parse_args()).main())
 
 if __name__ == "__main__":

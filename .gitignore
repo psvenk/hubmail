@@ -10,3 +10,5 @@ test/config
 *.eml
 *.mbox
 *.patch
+
+mypy-html

@@ -1,0 +1,2 @@
+#!/bin/sh
+mypy --config-file mypy.ini --html-report mypy-html hubmail

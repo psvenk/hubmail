@@ -4,7 +4,7 @@
 
 import sys
 import os
-from email.policy import default as default_policy
+import email.policy
 from email.message import EmailMessage
 from email.headerregistry import Address
 from email.parser import HeaderParser
@@ -14,6 +14,13 @@ import textwrap
 import re
 import mimetypes
 import posixpath
+
+from typing import (Any, Optional, Dict, Literal, List, cast, AsyncIterator,
+                    Union, Tuple)
+from hubmail.types import (QueryVariables, Issue, PullRequest,
+                           IssueOrPullRequestConnection, IssueComment,
+                           IssueCommentConnection, Actor)
+from datetime import datetime
 
 try:
     from hubmail.mdparse import get_image_urls
@@ -29,34 +36,37 @@ _QUERY_FILE_NAME = os.path.join(
 with open(_QUERY_FILE_NAME, "r") as queryFile:
     _QUERY = queryFile.read()
 
-def fatal(*args, **kwargs):
-    print(*args, **kwargs, file=sys.stderr)
+def fatal(*args: Any, **kwargs: Any) -> None:
+    print(*args, **kwargs, file=sys.stderr) # type: ignore
     sys.exit(1)
 
-NULL_ACTOR = {
+NULL_ACTOR: Actor = {
     "login": "ghost",
     "name": "ghost",
     "email": "",
-    "emailOrNull": ""
+    "emailOrNull": "",
 }
 REGEX_FROM = re.compile(r"^From", flags=re.MULTILINE)
 REGEX_FROM_SPACE = re.compile(r"^From ", flags=re.MULTILINE)
 REGEX_PATCH = re.compile(r"^\[PATCH( .*?)?]", flags=re.MULTILINE)
 
 class Hubmail:
-    def __init__(self, arguments):
-        self.type = arguments.subcommand
-        self.user = arguments.user
-        self.repo = arguments.repo
-        self.comments = arguments.comments
-        self.wrap = arguments.wrap
-        self.extended_subject = arguments.extended_subject
-        self.html = arguments.html
+    def __init__(self, arguments: Any) -> None:
+        self.type: str = arguments.subcommand
+        self.user: str = arguments.user
+        self.repo: str = arguments.repo
+        self.comments: Optional[int] = arguments.comments
+        self.wrap: Optional[int] = arguments.wrap
+        self.extended_subject: bool = arguments.extended_subject
+        self.html: bool = arguments.html
 
+        self.number: Optional[int]
         try:
             self.number = arguments.number
         except AttributeError:
             pass
+
+        self.threads: Optional[int]
         try:
             self.threads = arguments.threads
         except AttributeError:
@@ -64,17 +74,17 @@ class Hubmail:
 
         self.total_threads = 0
 
-        self.policy = default_policy.clone(
+        self.policy = email.policy.default.clone(
             max_line_length = self.wrap,
             raise_on_defect = True,
         )
-        self.patch_policy = default_policy.clone(
+        self.patch_policy = email.policy.default.clone(
             max_line_length = None,
             refold_source = "none",
             raise_on_defect = True,
         )
 
-    async def _run_query(self, opname, variables):
+    async def _run_query(self, opname: str, variables: QueryVariables) -> Any:
         assert self.session, "No session initialized"
         async with self.session.post(
             "https://api.github.com/graphql",
@@ -90,22 +100,27 @@ class Hubmail:
             assert "errors" not in result, result["errors"]
             return result
 
-    async def _get_thread(self, thread_type, user, repo, number):
-        # thread_type is either "issue" or "pullRequest"
+    async def _get_thread(
+        self, thread_type: Literal["issue", "pullRequest"], user: str,
+        repo: str, number: int
+    ) -> Union[Issue, PullRequest]:
         query = thread_type[0].upper() + thread_type[1:]
-        variables = {
+        variables: QueryVariables = {
             "user": user,
             "repo": repo,
             "number": number,
             "html": self.html,
         }
-        result = ((await self._run_query(query, variables))
-                  ["data"]["repository"][thread_type])
+        result = cast(Union[Issue, PullRequest],
+                      (await self._run_query(query, variables))
+                      ["data"]["repository"][thread_type])
         assert result is not None
         return result
 
-    async def _get_threads(self, threads_type, user, repo):
-        # threads_type is either "issues" or "pullRequests"
+    async def _get_threads(
+        self, threads_type: Literal["issues", "pullRequests"], user: str,
+        repo: str
+    ) -> AsyncIterator[List[Union[Issue, PullRequest]]]:
         query = threads_type[0].upper() + threads_type[1:]
         # Get threads from end (reverse order) if negative number of threads
         # specified
@@ -115,7 +130,7 @@ class Hubmail:
         else:
             reverse_order = False
         num_threads = abs(self.threads) if self.threads is not None else None
-        variables = {
+        variables: QueryVariables = {
             "user": user, "repo": repo,
             "numThreads": (
                 20 if num_threads is None or num_threads >= 20
@@ -125,9 +140,9 @@ class Hubmail:
             "html": self.html,
         }
         while True:
-            ## IssueConnection! | PullRequestConnection!
-            result = ((await self._run_query(query, variables))
-                      ["data"]["repository"][threads_type])
+            result = cast(IssueOrPullRequestConnection,
+                          (await self._run_query(query, variables))
+                          ["data"]["repository"][threads_type])
             if reverse_order:
                 result["nodes"] = result["nodes"][::-1]
             self.total_threads += len(result["nodes"])
@@ -141,7 +156,7 @@ class Hubmail:
             if not variables["cursor"]:
                 break
 
-    async def _get_comments(self, id):
+    async def _get_comments(self, id: str) -> AsyncIterator[List[IssueComment]]:
         # Get threads from end (reverse order) if negative number of comments
         # specified
         if self.comments is not None and self.comments < 0:
@@ -152,7 +167,7 @@ class Hubmail:
             reverse_order = False
         num_comments = (abs(self.comments) if self.comments is not None
                         else None)
-        variables = {
+        variables: QueryVariables = {
             "id": id,
             "numComments": (
                 20 if num_comments is None or num_comments >= 20
@@ -163,9 +178,9 @@ class Hubmail:
         }
         total_comments = 0
         while True:
-            ## IssueCommentConnection!
-            result = ((await self._run_query(query, variables))
-                      ["data"]["node"]["comments"])
+            result = cast(IssueCommentConnection,
+                          (await self._run_query(query, variables))
+                          ["data"]["node"]["comments"])
             if reverse_order:
                 result["nodes"] = result["nodes"][::-1]
             total_comments += len(result["nodes"])
@@ -180,14 +195,13 @@ class Hubmail:
             if not variables["cursor"]:
                 break
 
-    async def _format_email(self, name, address, timestamp, subject, body,
-                      message_id, *, in_reply_to="", references="", html=None):
+    async def _format_email(self, name: str, address: str, timestamp: datetime,
+                            subject: str, body: str, message_id: str, *,
+                            in_reply_to: str = "", references: str = "",
+                            html: Optional[str] = None) -> str:
         body = body.replace("\r\n", "\n")
 
-        try:
-            cols = int(self.wrap)
-        except (ValueError, TypeError):
-            cols = 0
+        cols = self.wrap or 0
         if cols > 0:
             body = "\n".join(
                 textwrap.fill(
@@ -214,8 +228,9 @@ class Hubmail:
             for url in get_image_urls(body):
                 async with self.session.get(url) as resp:
                     assert resp.status == 200
-                    img_data = await resp.read()
-                    maintype, subtype = mimetypes.guess_type(url)[0].split("/")
+                    img_data: bytes = await resp.read()
+                    maintype, subtype = (mimetypes.guess_type(url)[0] or
+                                         "application/octet-stream").split("/")
                     filename = posixpath.basename(urlparse(url).path)
                     msg.add_attachment(
                         img_data, maintype=maintype, subtype=subtype,
@@ -247,7 +262,7 @@ class Hubmail:
         # supporting native Unicode.
         return msg.as_bytes(policy=self.policy, unixfrom=True).decode()
 
-    async def _format_issue(self, user, repo, issue):
+    async def _format_issue(self, user: str, repo: str, issue: Issue) -> str:
         number = issue["number"]
         author = issue["author"] or NULL_ACTOR
         assert number and author
@@ -255,9 +270,9 @@ class Hubmail:
                    if self.extended_subject else issue["title"])
         html = issue["bodyHTML"] if self.html else None
         result = await self._format_email(
-            author.get("name") or author.get("login"), author.get("email") or
-            author.get("emailOrNull") or "", isoparse(issue["createdAt"]),
-            subject, issue["body"],
+            author.get("name") or author.get("login") or "",
+            author.get("email") or author.get("emailOrNull") or "",
+            isoparse(issue["createdAt"]), subject, issue["body"],
             f"<{user}/{repo}/issues/{number}@github.com>", html=html)
         if self.comments == 0:
             return result
@@ -265,11 +280,13 @@ class Hubmail:
             issue["id"], f"Re: {subject}",
             (user, repo, "issues", str(number)))])
 
-    async def format_issue(self, user, repo, number):
-        issue = await self._get_thread("issue", user, repo, number)
+    async def format_issue(self, user: str, repo: str, number: int) -> str:
+        issue = cast(Issue,
+                     await self._get_thread("issue", user, repo, number))
         return await self._format_issue(user, repo, issue)
 
-    async def _format_pull(self, user, repo, pull):
+    async def _format_pull(self, user: str, repo: str,
+                           pull: PullRequest) -> str:
         number = pull["number"]
         author = pull["author"] or NULL_ACTOR
         assert number and author
@@ -279,9 +296,10 @@ class Hubmail:
         message_id = f"<{'/'.join(thread_info)}@github.com>"
         html = pull["bodyHTML"] if self.html else None
         result = await self._format_email(
-            author.get("name") or author.get("login"), author.get("email") or
-            author.get("emailOrNull") or "", isoparse(pull["createdAt"]),
-            subject, pull["body"], message_id, html=html)
+            author.get("name") or author.get("login") or "",
+            author.get("email") or author.get("emailOrNull") or "",
+            isoparse(pull["createdAt"]), subject, pull["body"],
+            message_id, html=html)
 
         # Get pull request patches
         async with self.session.get(f"{pull['url']}.patch") as resp:
@@ -314,48 +332,48 @@ class Hubmail:
         return result + "\n".join([i async for i in self._format_comments(
             pull["id"], f"Re: {subject}", thread_info)])
 
-    async def format_pull(self, user, repo, number):
-        ## PullRequest!
-        pull = await self._get_thread("pullRequest", user, repo, number)
+    async def format_pull(self, user: str, repo: str, number: int) -> str:
+        pull = cast(PullRequest,
+                    await self._get_thread("pullRequest", user, repo, number))
         return await self._format_pull(user, repo, pull)
 
-    async def _format_issues(self, user, repo):
-        ## [Issue]!
-        async for issues in self._get_threads("issues", user, repo):
+    async def _format_issues(self, user: str, repo: str) -> AsyncIterator[str]:
+        async for issues in cast(AsyncIterator[List[Issue]],
+                                 self._get_threads("issues", user, repo)):
             for issue in issues:
                 yield await self._format_issue(user, repo, issue)
 
-    async def format_issues(self, user, repo):
+    async def format_issues(self, user: str, repo: str) -> str:
         return "\n\n".join([i async for i in self._format_issues(user, repo)])
 
-    async def _format_pulls(self, user, repo):
-        ## [PullRequest]!
-        async for pulls in self._get_threads("pullRequests", user, repo):
+    async def _format_pulls(self, user: str, repo: str) -> AsyncIterator[str]:
+        async for pulls in cast(AsyncIterator[List[PullRequest]],
+                                self._get_threads("pullRequests", user, repo)):
             for pull in pulls:
                 yield await self._format_pull(user, repo, pull)
 
-    async def format_pulls(self, user, repo):
+    async def format_pulls(self, user: str, repo: str) -> str:
         return "\n\n".join([i async for i in self._format_pulls(user, repo)])
 
-    async def _format_comments(self, id, subject, thread_info):
+    async def _format_comments(
+        self, id: str, subject: str, thread_info: Tuple[str, str, str, str]
+    ) -> AsyncIterator[str]:
         user, repo, _, number = thread_info
-        ## [IssueComment]!
         async for comments in self._get_comments(id):
             result = ""
             orig_message_id = f"<{'/'.join(thread_info)}@github.com>"
             for comment in comments:
-                ## {login: String!, name?: String, email?: String!, emailOrNull?: String}
                 author = comment["author"] or NULL_ACTOR
                 message_id = f"<{'/'.join(thread_info)}/c{comment['databaseId']}@github.com>"
                 html = comment["bodyHTML"] if self.html else None
                 result += "\n\n" + await self._format_email(
-                    author.get("name") or author.get("login"),
+                    author.get("name") or author.get("login") or "",
                     author.get("email") or author.get("emailOrNull") or "",
                     isoparse(comment["createdAt"]), subject, comment["body"],
                     message_id, in_reply_to=orig_message_id, html=html)
             yield result
 
-    async def main(self):
+    async def main(self) -> None:
         self.token = os.getenv("HUBMAIL_TOKEN")
         if not self.token:
             fatal("No API token found. Have you set the HUBMAIL_TOKEN " +
@@ -363,9 +381,11 @@ class Hubmail:
 
         async with aiohttp.ClientSession() as self.session:
             if self.type == "issue":
+                assert self.number is not None
                 print(await self.format_issue(
                     self.user, self.repo, self.number))
             elif self.type == "pull":
+                assert self.number is not None
                 print(await self.format_pull(
                     self.user, self.repo, self.number))
             elif self.type == "issues":

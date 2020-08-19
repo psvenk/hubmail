@@ -5,14 +5,15 @@ import json
 
 from mistletoe import Document
 from mistletoe.ast_renderer import ASTRenderer
+from typing import List, Any
 
-def get_image_urls(text):
+def get_image_urls(text: str) -> List[str]:
     """Gets image URLs from a Markdown document"""
     with ASTRenderer() as renderer:
         ast = json.loads(renderer.render(Document(text)))
     return _get_image_urls(ast)
 
-def _get_image_urls(ast):
+def _get_image_urls(ast: Any) -> List[str]:
     """Returns an array of URLs given a mistletoe AST"""
     if ast["type"] == "Image" and ast["src"]:
         return [ast["src"]]
